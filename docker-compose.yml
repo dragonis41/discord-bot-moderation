@@ -1,0 +1,21 @@
+services:
+  discord-bot-moderation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord-bot-moderation
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      # Discord configuration
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+
+    # Resource limits
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: '0.5'
+    #      memory: 256M
+    #    reservations:
+    #      cpus: '0.25'
+    #      memory: 128M
