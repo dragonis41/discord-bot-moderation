@@ -11,11 +11,33 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
+var (
+	red   = 0xff0000
+	green = 0x00dd00
+	blue  = 0x0099ff
+
+	defaultFooter = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
+)
+
 type DiscordHandlerInterface interface {
 	RunDiscordBot()
-	registerSlashCommands()
-	slashCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate)
-	removeSlashCommands()
+}
+
+func (d *Discord) displayConnectedGuilds() {
+	fmt.Printf("\n======= Connected Servers =======\n")
+	for _, guild := range d.client.State.Guilds {
+		// Fetch full guild data if name is empty
+		if guild.Name == "" {
+			fullGuild, err := d.client.Guild(guild.ID)
+			if err != nil {
+				fmt.Printf("Server: [<error fetching>] (ID: %s)\n", guild.ID)
+				continue
+			}
+			guild = fullGuild
+		}
+		fmt.Printf("Server: [%s] (ID: %s)\n", guild.Name, guild.ID)
+	}
+	fmt.Printf("=================================\n\n")
 }
 
 func (d *Discord) RunDiscordBot() {
@@ -43,6 +65,14 @@ func (d *Discord) RunDiscordBot() {
 
 	// Register slash commands
 	d.registerSlashCommands()
+
+	// Initialize system stats
+	if err := utils.InitSystemStats(); err != nil {
+		utils.LogWarning(fmt.Sprintf("Failed to initialize system stats: %v", err))
+	}
+
+	// Initialize uptime tracking
+	utils.NewUptime()
 
 	// keep bot running until there is an os interruption (ctrl+c or SIGTERM signal)
 	fmt.Printf("\n")
@@ -76,6 +106,10 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
+			Name:        "status",
+			Description: "Affiche le statut du bot",
+		},
+		{
 			Name:        "help",
 			Description: "Liste toutes les commandes disponibles",
 		},
@@ -101,6 +135,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 	switch i.ApplicationCommandData().Name {
 	case "report":
 		d.reportUser(s, i)
+	case "status":
+		d.showStatus(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}

@@ -10,26 +10,9 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
-type DiscordFunctionInterface interface {
-	displayConnectedGuilds()
+type DiscordUserFunctionInterface interface {
 	reportUser(s *discordgo.Session, i *discordgo.InteractionCreate)
 	showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
-}
-
-var (
-	red   = 0xff0000
-	green = 0x00dd00
-	blue  = 0x0099ff
-
-	defaultFooter = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
-)
-
-func (d *Discord) displayConnectedGuilds() {
-	fmt.Printf("\n======= Connected Servers =======\n")
-	for _, guild := range d.client.State.Guilds {
-		fmt.Printf("Server: (ID: %s)\n", guild.ID)
-	}
-	fmt.Printf("=================================\n\n")
 }
 
 func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -96,7 +79,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	))
 
 	// TODO : Get this list from the database
-	roleNames := []string{"sudoers"}
+	adminRoleNames := []string{"sudoers"}
 
 	// Get the list of all roles in the guild
 	roles, err := s.GuildRoles(i.GuildID)
@@ -119,7 +102,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		roleMap[role.Name] = role.ID
 	}
 	modRoleMentions := ""
-	for _, name := range roleNames {
+	for _, name := range adminRoleNames {
 		if id, exists := roleMap[name]; exists {
 			modRoleMentions = fmt.Sprintf("%s<@&%s> ", modRoleMentions, id)
 		}
