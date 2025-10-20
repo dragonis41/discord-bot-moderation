@@ -87,7 +87,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
 					CustomID:    fmt.Sprintf("channel_select_menu_%d", page),
-					Placeholder: "Sélectionnez les salons à surveiller",
+					Placeholder: "Sélectionnez les salons de modération",
 					MinValues:   &minVal,
 					MaxValues:   len(options),
 					Options:     options,
@@ -104,7 +104,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Sélection des salons",
-		Description: fmt.Sprintf("Sélectionnez les salons à surveiller. %d salons actuellement sélectionnés.\nTotal: %d salons textuels", len(previouslySelected), len(channels)),
+		Description: fmt.Sprintf("Sélectionnez les salons de modération puis cliquez sur \"Terminer\".\nCe sont les salons dans lesquels les modérateurs vont être notifiés.\n\n**%d**/**%d** salons sélectionnés.", len(previouslySelected), len(channels)),
 		Color:       blue,
 		Footer:      &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
 		Timestamp:   time.Now().Format(time.RFC3339),
@@ -124,7 +124,7 @@ func (d *Discord) buildSelectMenuOptions(channels []*discordgo.Channel, selected
 		options[i] = discordgo.SelectMenuOption{
 			Label:       channel.Name,
 			Value:       channel.ID,
-			Description: fmt.Sprintf("Salon textuel #%s", channel.Name),
+			Description: channel.Topic,
 			Default:     selectedMap[channel.ID],
 			Emoji:       &discordgo.ComponentEmoji{Name: "💬"},
 		}

@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -96,33 +95,41 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	// Send a message in the mod channel
 	// TODO : Get the mod channel ID from the database
-	_, err = s.ChannelMessageSendComplex(os.Getenv("DISCORD_MOD_CHANNEL_ID"), &discordgo.MessageSend{
-		Content: modRoleMentions,
-		Embed: &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
-			Description: fmt.Sprintf("**Utilisateur signalé**: <@!%s> (ID : %s)\n**Salon**: <#%s>\n**Raison** : %s",
-				reportedUser.ID,
-				reportedUser.ID,
-				i.ChannelID,
-				reason,
-			),
-			Color:     red,
-			Timestamp: time.Now().Format(time.RFC3339),
-		},
-	})
-	if err != nil {
-		utils.LogError(fmt.Sprintf("reportUser: Error sending message to mod channel: %s", err))
+	// For now, the variable is selectedChannels = make(map[string][]string) // guildID -> []channelID
+	// For each channel in selectedChannels[i.GuildID], send the message
+	if len(selectedChannels[i.GuildID]) == 0 {
+		utils.LogError("reportUser: No moderation channels configured for this guild")
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
-					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
+					Description: "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
 					Color:       red,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
 		})
 		return
+	}
+	for _, channelID := range selectedChannels[i.GuildID] {
+		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+			Content: modRoleMentions,
+			Embed: &discordgo.MessageEmbed{
+				Title: fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
+				Description: fmt.Sprintf("**Utilisateur signalé**: <@!%s> (ID : %s)\n**Salon**: <#%s>\n**Raison**: %s",
+					reportedUser.ID,
+					reportedUser.ID,
+					i.ChannelID,
+					reason,
+				),
+				Color:     red,
+				Timestamp: time.Now().Format(time.RFC3339),
+			},
+		})
+		if err != nil {
+			utils.LogError(fmt.Sprintf("reportUser: Error sending message to mod channel: %s", err))
+			continue
+		}
 	}
 
 	// Tell the user that the report has been received

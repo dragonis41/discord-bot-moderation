@@ -10,3 +10,11 @@ A Discord bot to auto moderate a server because nobody want spams
 6. Copy the ID of your application from the "General Information" tab.
 7. Go to the following URL in your browser, replacing `YOUR_CLIENT_ID` with your application's client ID:
    ```https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=274877926400&scope=bot%20applications.commands```
+
+# Usage
+1. When the bot is added to a server, it will automatically start moderating messages based on predefined rules.
+2. You need to use the `/set-moderation-channels` command to specify which channels the bot should monitor for moderation.
+3. You also need to use the `/set-log-channel` command to specify which channel the bot should use to log moderation actions.
+4. And the `/set-admin-roles` command to specify which role has permission to manage the bot settings and be notified of moderation actions.
+
+// TODO : Replace this with `/setup` command that does all the setup in one go.
