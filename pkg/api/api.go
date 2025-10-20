@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/internal/database"
 )
 
 var (
@@ -13,11 +14,13 @@ var (
 )
 
 type Discord struct {
+	db     *database.Database
 	client *discordgo.Session
 }
 
-func NewClient(discordClient *discordgo.Session) *Discord {
+func NewClient(db *database.Database, discordClient *discordgo.Session) *Discord {
 	return &Discord{
+		db:     db,
 		client: discordClient,
 	}
 }

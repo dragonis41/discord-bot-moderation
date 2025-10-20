@@ -93,11 +93,24 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	}
 
+	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("reportUser: Error fetching moderation channels from database: %s", err))
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{
+					Title:       "Report",
+					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
+					Color:       red,
+					Timestamp:   time.Now().Format(time.RFC3339),
+				},
+			},
+		})
+		return
+	}
+
 	// Send a message in the mod channel
-	// TODO : Get the mod channel ID from the database
-	// For now, the variable is selectedChannels = make(map[string][]string) // guildID -> []channelID
-	// For each channel in selectedChannels[i.GuildID], send the message
-	if len(selectedChannels[i.GuildID]) == 0 {
+	if len(selectedChannels) == 0 {
 		utils.LogError("reportUser: No moderation channels configured for this guild")
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
@@ -111,7 +124,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		return
 	}
-	for _, channelID := range selectedChannels[i.GuildID] {
+	for _, channelID := range selectedChannels {
 		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 			Content: modRoleMentions,
 			Embed: &discordgo.MessageEmbed{

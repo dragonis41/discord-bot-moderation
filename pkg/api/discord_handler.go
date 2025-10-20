@@ -39,6 +39,7 @@ func (d *Discord) RunDiscordBot() {
 	// add an event handler for slash commands
 	d.client.AddHandler(d.slashCommandHandler)
 	d.client.AddHandler(d.handleChannelSelection)
+	d.client.AddHandler(d.handleRoleSelection)
 
 	// open session
 	err := d.client.Open()
@@ -62,6 +63,14 @@ func (d *Discord) RunDiscordBot() {
 	// Initialize system stats
 	if err := utils.InitSystemStats(); err != nil {
 		utils.LogWarning(fmt.Sprintf("Failed to initialize system stats: %v", err))
+	}
+
+	// Set default max log entries for each connected guild
+	for _, guild := range d.client.State.Guilds {
+		err := d.db.SetMaxLogEntries(guild.ID, 100)
+		if err != nil {
+			utils.LogWarning(fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err))
+		}
 	}
 
 	// Initialize uptime tracking
@@ -107,6 +116,10 @@ func (d *Discord) registerSlashCommands() {
 			Description: "Sélectionne les canaux où les rapports de modération seront envoyés",
 		},
 		{
+			Name:        "set-moderation-roles",
+			Description: "Sélectionne les roles qui auront les permissions de modération",
+		},
+		{
 			Name:        "help",
 			Description: "Liste toutes les commandes disponibles",
 		},
@@ -136,6 +149,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.showStatus(s, i)
 	case "set-moderation-channels":
 		d.selectModeratorChannels(s, i)
+	case "set-moderation-roles":
+		d.selectModeratorRoles(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}

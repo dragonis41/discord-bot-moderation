@@ -11,6 +11,7 @@ import (
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
 	selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
+	selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -28,7 +29,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username))
 
-	if !utils.CheckAdminPermission(s, i) {
+	if !d.db.CheckAdminPermission(s, i) {
 		return
 	}
 
@@ -94,6 +95,15 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 
+	maxEntries, err := d.db.GetMaxLogEntries(i.GuildID)
+	if err == nil {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Max log entries",
+			Value:  fmt.Sprintf("%d", maxEntries),
+			Inline: false,
+		})
+	}
+
 	// TODO : Also show the last errors in the logs
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -124,7 +134,7 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 
 	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
 
-	if !utils.CheckAdminPermission(s, i) {
+	if !d.db.CheckAdminPermission(s, i) {
 		return
 	}
 
@@ -137,4 +147,31 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 
 	// Start with page 0
 	d.sendChannelSelectPage(s, i.Interaction, textChannels, 0)
+}
+
+func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	}); err != nil {
+		utils.LogError(fmt.Sprintf("selectModeratorRoles: Error deferring response: %s", err))
+		return
+	}
+
+	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
+
+	if !d.db.CheckAdminPermission(s, i) {
+		return
+	}
+
+	// Get roles
+	roles, err := d.getRoles(s, i.GuildID)
+	if err != nil {
+		d.sendErrorMessage(s, i.Interaction, "Sélection des roles", "Une erreur est survenue lors de la récupération des roles.")
+		return
+	}
+
+	// Start with page 0
+	d.sendRoleSelectPage(s, i.Interaction, roles, 0)
 }

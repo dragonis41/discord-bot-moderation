@@ -10,11 +10,6 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
-// TODO : Register this in a database
-var selectedChannels = make(map[string][]string) // guildID -> []channelID
-
-const channelsPerPage = 25
-
 func (d *Discord) getTextChannels(s *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
 	channels, err := s.GuildChannels(guildID)
 	if err != nil {
@@ -34,17 +29,6 @@ func (d *Discord) getTextChannels(s *discordgo.Session, guildID string) ([]*disc
 	})
 
 	return textChannels, nil
-}
-
-func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interaction, title, description string) {
-	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{{
-			Title:       title,
-			Description: description,
-			Color:       red,
-			Timestamp:   time.Now().Format(time.RFC3339),
-		}},
-	})
 }
 
 func (d *Discord) sendChannelSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, channels []*discordgo.Channel, page int) {
@@ -77,8 +61,11 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	end := min(start+channelsPerPage, len(channels))
 
 	// Build select menu options
-	previouslySelected := selectedChannels[guildID]
-	options := d.buildSelectMenuOptions(channels[start:end], previouslySelected)
+	previouslySelected, err := d.db.GetModerationChannelsByGuildId(guildID)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("buildChannelSelectMessage: Error fetching selected channels: %s", err))
+	}
+	options := d.buildChannelSelectMenuOptions(channels[start:end], previouslySelected)
 
 	// Create components
 	minVal := 0
@@ -97,7 +84,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	}
 
 	// Add navigation buttons
-	buttons := d.buildNavigationButtons(page, totalPages)
+	buttons := d.buildChannelNavigationButtons(page, totalPages)
 	if len(buttons) > 0 {
 		components = append(components, discordgo.ActionsRow{Components: buttons})
 	}
@@ -113,7 +100,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	return embed, components
 }
 
-func (d *Discord) buildSelectMenuOptions(channels []*discordgo.Channel, selectedIDs []string) []discordgo.SelectMenuOption {
+func (d *Discord) buildChannelSelectMenuOptions(channels []*discordgo.Channel, selectedIDs []string) []discordgo.SelectMenuOption {
 	selectedMap := make(map[string]bool)
 	for _, id := range selectedIDs {
 		selectedMap[id] = true
@@ -132,7 +119,7 @@ func (d *Discord) buildSelectMenuOptions(channels []*discordgo.Channel, selected
 	return options
 }
 
-func (d *Discord) buildNavigationButtons(page, totalPages int) []discordgo.MessageComponent {
+func (d *Discord) buildChannelNavigationButtons(page, totalPages int) []discordgo.MessageComponent {
 	var buttons []discordgo.MessageComponent
 
 	if totalPages > 1 {
@@ -177,6 +164,10 @@ func (d *Discord) handleChannelSelection(s *discordgo.Session, i *discordgo.Inte
 	data := i.MessageComponentData()
 	customID := data.CustomID
 
+	if !strings.HasPrefix(customID, "channel_select") && !strings.HasPrefix(customID, "channel_page") {
+		return
+	}
+
 	// Respond immediately for all interactions
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
@@ -190,9 +181,9 @@ func (d *Discord) handleChannelSelection(s *discordgo.Session, i *discordgo.Inte
 	case strings.HasPrefix(customID, "channel_select_menu_"):
 		d.handleChannelSelectionUpdate(s, i, data.Values)
 	case strings.HasPrefix(customID, "channel_page_"):
-		d.handlePageNavigation(s, i, customID)
+		d.handleChannelPageNavigation(s, i, customID)
 	case customID == "channel_select_done":
-		d.handleSelectionDone(s, i)
+		d.handleChannelSelectionDone(s, i)
 	}
 }
 
@@ -217,7 +208,11 @@ func (d *Discord) handleChannelSelectionUpdate(s *discordgo.Session, i *discordg
 
 	// Merge selections
 	newSelections := make(map[string]bool)
-	for _, id := range selectedChannels[i.GuildID] {
+	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error fetching selected channels: %s", err))
+	}
+	for _, id := range selectedChannels {
 		if !pageChannelIDs[id] {
 			newSelections[id] = true
 		}
@@ -226,16 +221,22 @@ func (d *Discord) handleChannelSelectionUpdate(s *discordgo.Session, i *discordg
 		newSelections[id] = true
 	}
 
-	// Convert back to slice
-	selectedChannels[i.GuildID] = nil
+	// Clear the database and re-add selections
+	err = d.db.RemoveModerationChannelsByGuild(i.GuildID)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error clearing selected channels: %s", err))
+	}
 	for id := range newSelections {
-		selectedChannels[i.GuildID] = append(selectedChannels[i.GuildID], id)
+		err := d.db.AddModerationChannel(i.GuildID, id)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error adding selected channel [%s]: %s", id, err))
+		}
 	}
 
 	d.editChannelSelectMessage(s, i, textChannels, page)
 }
 
-func (d *Discord) handlePageNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {
+func (d *Discord) handleChannelPageNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {
 	var currentPage int
 
 	if strings.Contains(customID, "prev") {
@@ -250,8 +251,11 @@ func (d *Discord) handlePageNavigation(s *discordgo.Session, i *discordgo.Intera
 	d.editChannelSelectMessage(s, i, textChannels, currentPage)
 }
 
-func (d *Discord) handleSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	selectedIDs := selectedChannels[i.GuildID]
+func (d *Discord) handleChannelSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	selectedIDs, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("handleSelectionDone: Error fetching selected channels: %s", err))
+	}
 	var channelNames []string
 
 	// Get all channels for the guild to ensure we have the latest data
