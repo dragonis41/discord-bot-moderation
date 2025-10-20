@@ -11,14 +11,6 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
-var (
-	red   = 0xff0000
-	green = 0x00dd00
-	blue  = 0x0099ff
-
-	defaultFooter = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
-)
-
 type DiscordHandlerInterface interface {
 	RunDiscordBot()
 }
@@ -46,6 +38,7 @@ func (d *Discord) RunDiscordBot() {
 
 	// add an event handler for slash commands
 	d.client.AddHandler(d.slashCommandHandler)
+	d.client.AddHandler(d.handleChannelSelection)
 
 	// open session
 	err := d.client.Open()
@@ -110,6 +103,10 @@ func (d *Discord) registerSlashCommands() {
 			Description: "Affiche le statut du bot",
 		},
 		{
+			Name:        "set-moderation-channels",
+			Description: "Sélectionne les canaux où les rapports de modération seront envoyés",
+		},
+		{
 			Name:        "help",
 			Description: "Liste toutes les commandes disponibles",
 		},
@@ -137,6 +134,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.reportUser(s, i)
 	case "status":
 		d.showStatus(s, i)
+	case "set-moderation-channels":
+		d.selectModeratorChannels(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}

@@ -46,3 +46,18 @@ func UserHasRoleByName(s *discordgo.Session, i *discordgo.InteractionCreate, rol
 	// Use the original function with role IDs
 	return UserHasRoleByIds(i, roleIDs)
 }
+
+func CheckAdminPermission(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	// TODO : Get roles from the database
+	adminRoleNames := []string{"sudoers"}
+	if !UserHasRoleByName(s, i, adminRoleNames) {
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{{
+				Description: "❌ Vous n'avez pas la permission d'utiliser cette commande.",
+				Color:       0xff0000,
+			}},
+		})
+		return false
+	}
+	return true
+}

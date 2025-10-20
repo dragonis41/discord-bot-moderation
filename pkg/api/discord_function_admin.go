@@ -10,6 +10,7 @@ import (
 
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
+	selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -27,17 +28,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username))
 
-	// TODO : Get roles from the database
-	adminRoleNames := []string{"sudoers"}
-	if !utils.UserHasRoleByName(s, i, adminRoleNames) {
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Description: "❌ Vous n'avez pas la permission d'utiliser cette commande.",
-					Color:       red,
-				},
-			},
-		})
+	if !utils.CheckAdminPermission(s, i) {
 		return
 	}
 
@@ -118,6 +109,32 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 	if err != nil {
 		utils.LogError(fmt.Sprintf("showStatus: Error sending follow-up message: %s", err))
+	}
+}
+
+func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	}); err != nil {
+		utils.LogError(fmt.Sprintf("selectModeratorChannels: Error deferring response: %s", err))
 		return
 	}
+
+	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
+
+	if !utils.CheckAdminPermission(s, i) {
+		return
+	}
+
+	// Get text channels
+	textChannels, err := d.getTextChannels(s, i.GuildID)
+	if err != nil {
+		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
+		return
+	}
+
+	// Start with page 0
+	d.sendChannelSelectPage(s, i.Interaction, textChannels, 0)
 }
