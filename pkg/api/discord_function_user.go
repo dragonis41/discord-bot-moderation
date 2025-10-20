@@ -36,21 +36,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	for _, option := range options {
 		switch option.Name {
 		case "user":
-			reportedUser, err = s.User(option.StringValue())
-			if err != nil {
-				utils.LogError(fmt.Sprintf("reportUser: Error fetching reported user: %s", err))
-				_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-					Embeds: []*discordgo.MessageEmbed{
-						{
-							Title:       "Report",
-							Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-							Color:       red,
-							Timestamp:   time.Now().Format(time.RFC3339),
-						},
-					},
-				})
-				return
-			}
+			reportedUser = option.UserValue(s)
 		case "reason":
 			reason = option.StringValue()
 		}
@@ -110,13 +96,19 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	// Send a message in the mod channel
 	// TODO : Get the mod channel ID from the database
-	modChannelID := os.Getenv("DISCORD_MOD_CHANNEL_ID")
-
-	_, err = s.ChannelMessageSendEmbed(modChannelID, &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🚨 Nouveau signalement par <@%s>", i.Member.User.ID),
-		Description: fmt.Sprintf("%s\n**Utilisateur**: <@&%s> (ID : %s)\n**Salon**: <#%s>\n**Raison** : %s", modRoleMentions, reportedUser.ID, reportedUser.ID, i.ChannelID, reason),
-		Color:       red,
-		Timestamp:   time.Now().Format(time.RFC3339),
+	_, err = s.ChannelMessageSendComplex(os.Getenv("DISCORD_MOD_CHANNEL_ID"), &discordgo.MessageSend{
+		Content: modRoleMentions,
+		Embed: &discordgo.MessageEmbed{
+			Title: fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
+			Description: fmt.Sprintf("**Utilisateur signalé**: <@!%s> (ID : %s)\n**Salon**: <#%s>\n**Raison** : %s",
+				reportedUser.ID,
+				reportedUser.ID,
+				i.ChannelID,
+				reason,
+			),
+			Color:     red,
+			Timestamp: time.Now().Format(time.RFC3339),
+		},
 	})
 	if err != nil {
 		utils.LogError(fmt.Sprintf("reportUser: Error sending message to mod channel: %s", err))

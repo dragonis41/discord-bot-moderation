@@ -103,6 +103,8 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 
+	// TODO : Also show the last errors in the logs
+
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
 			{
