@@ -11,6 +11,7 @@ import (
 type LogsInterface interface {
 	AddLogEntry(guildID string, logType model.LogType, function string, content string) error
 	GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, error)
+	GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]LogEntry, error)
 	GetLogEntriesCount(guildID string) (int, error)
 	SetMaxLogEntries(guildID string, maxEntries int) error
 	GetMaxLogEntries(guildID string) (int, error)
@@ -160,6 +161,11 @@ func (d *Database) SetMaxLogEntries(guildID string, maxEntries int) error {
 		return fmt.Errorf("failed to cleanup after setting new limit: %w", err)
 	}
 
+	// Also cleanup system logs
+	if err := d.cleanupOldLogEntries("", maxEntries); err != nil {
+		return fmt.Errorf("failed to cleanup system logs after setting new limit: %w", err)
+	}
+
 	return nil
 }
 
@@ -179,6 +185,39 @@ func (d *Database) GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, 
 	`
 
 	rows, err := d.db.Query(query, guildID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get log entries: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var entry LogEntry
+		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.LogType,
+			&entry.Function, &entry.Content, &entry.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan log entry: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return entries, nil
+}
+
+// GetLogEntriesErrorsByGuildAndSystem retrieves log entries for a specific guild and system-wide error logs
+func (d *Database) GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]LogEntry, error) {
+	query := `
+		SELECT id, guild_id, log_type, function, content, created_at
+		FROM logs
+		WHERE (guild_id = ? OR guild_id = '') AND log_type = ?
+		ORDER BY created_at DESC, id DESC
+		LIMIT ?;
+		`
+
+	rows, err := d.db.Query(query, guildID, model.ErrorType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get log entries: %w", err)
 	}

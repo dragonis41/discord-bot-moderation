@@ -98,26 +98,27 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 
-	maxEntries, err := d.db.GetMaxLogEntries(i.GuildID)
+	nbEntries, err := d.db.GetLogEntriesCount(i.GuildID)
 	if err == nil {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Max log entries",
-			Value:  fmt.Sprintf("%d", maxEntries),
-			Inline: false,
-		})
+		maxEntries, err := d.db.GetMaxLogEntries(i.GuildID)
+		if err == nil {
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   "Log entries",
+				Value:  fmt.Sprintf("%d/%d", nbEntries, maxEntries),
+				Inline: false,
+			})
+		}
 	}
 
-	last10Errors, err := d.db.GetLogEntriesByGuild(i.GuildID, 10)
-	if err == nil && len(last10Errors) > 0 {
+	last5Errors, err := d.db.GetLogEntriesErrorsByGuildAndSystem(i.GuildID, 5)
+	if err == nil && len(last5Errors) > 0 {
 		errorMessages := ""
-		for _, entry := range last10Errors {
-			if entry.LogType == model.ErrorType.String() {
-				errorMessages += fmt.Sprintf("- [%s] %s : %s\n", entry.CreatedAt, entry.Function, entry.Content)
-			}
+		for _, entry := range last5Errors {
+			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
 		}
 		if errorMessages != "" {
 			fields = append(fields, &discordgo.MessageEmbedField{
-				Name:   "10 dernières erreurs",
+				Name:   "5 dernières erreurs",
 				Value:  errorMessages,
 				Inline: false,
 			})
