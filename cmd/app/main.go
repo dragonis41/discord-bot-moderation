@@ -35,7 +35,7 @@ func main() {
 	// Create the Discord client
 	discordClient, err := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN"))
 	if err != nil {
-		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while creating the Discord client: %s", err)})
+		l.LogError(logger.LogModel{Database: db, Function: "main()", Message: fmt.Sprintf("Error while creating the Discord client: %s", err)})
 		return
 	}
 
