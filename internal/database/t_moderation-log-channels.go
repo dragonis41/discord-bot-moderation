@@ -2,8 +2,6 @@ package database
 
 import (
 	"fmt"
-
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
 type LogChannelsInterface interface {
@@ -23,12 +21,10 @@ func (d *Database) MigrateLogChannel() error {
 	);
 	`
 
-	utils.LogInfo("Running migration for log_channels table...")
 	_, err := d.db.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create log_channels table: %w", err)
 	}
-	utils.LogSuccess("Migration for log_channels table completed successfully")
 
 	return nil
 }

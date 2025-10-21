@@ -2,8 +2,6 @@ package database
 
 import (
 	"fmt"
-
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
 type ModerationRolesInterface interface {
@@ -23,12 +21,10 @@ func (d *Database) MigrateModerationRole() error {
 	);
 	`
 
-	utils.LogInfo("Running migration for moderation_roles table...")
 	_, err := d.db.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create moderation_roles table: %w", err)
 	}
-	utils.LogSuccess("Migration for moderation_roles table completed successfully")
 
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -37,6 +36,23 @@ func NewDatabase() (*Database, error) {
 	return &Database{db: db}, nil
 }
 
+func (d *Database) Migrate() error {
+	if err := d.MigrateLogs(); err != nil {
+		return err
+	}
+	if err := d.MigrateLogChannel(); err != nil {
+		return err
+	}
+	if err := d.MigrateModerationChannel(); err != nil {
+		return err
+	}
+	if err := d.MigrateModerationRole(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *Database) GetDBConnection() *sql.DB {
 	return d.db
 }
@@ -45,6 +61,5 @@ func (d *Database) CloseDatabase() error {
 	if err := d.db.Close(); err != nil {
 		return fmt.Errorf("failed to close database: %w", err)
 	}
-	utils.LogSuccess("Database connection closed successfully\n")
 	return nil
 }

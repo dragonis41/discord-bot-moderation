@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 type DiscordUserFunctionInterface interface {
@@ -23,7 +24,9 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("reportUser: Error deferring response: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
 		return
 	}
 
@@ -42,13 +45,16 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if reportedUser == nil {
-		utils.LogError("reportUser: Reported user is nil")
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: "Reported user is nil",
+		})
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
 					Description: "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer.",
-					Color:       Red,
+					Color:       model.Red.Int(),
+					Footer:      model.DefaultFooter,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -56,12 +62,15 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s] to report the user [%s] for the reason [%s]",
-		i.ApplicationCommandData().Name,
-		i.Member.User.Username,
-		reportedUser.Username,
-		reason,
-	))
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s] to report the user [%s] for the reason [%s]",
+			i.ApplicationCommandData().Name,
+			i.Member.User.Username,
+			reportedUser.Username,
+			reason,
+		),
+	})
+	// TODO : Log this report in the database
 
 	// TODO : Get this list from the database
 	adminRoleNames := []string{"sudoers"}
@@ -69,13 +78,16 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Get the list of all roles in the guild
 	roles, err := s.GuildRoles(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("reportUser: Error fetching guild roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: fmt.Sprintf("Error fetching guild roles: %s", err),
+		})
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
 					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-					Color:       Red,
+					Color:       model.Red.Int(),
+					Footer:      model.DefaultFooter,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -95,13 +107,16 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("reportUser: Error fetching moderation channels from database: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: fmt.Sprintf("Error fetching moderation channels from database: %s", err),
+		})
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
 					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-					Color:       Red,
+					Color:       model.Red.Int(),
+					Footer:      model.DefaultFooter,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -111,13 +126,16 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	// Send a message in the mod channel
 	if len(selectedChannels) == 0 {
-		utils.LogError("reportUser: No moderation channels configured for this guild")
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: "No moderation channels configured for this guild",
+		})
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
 					Description: "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
-					Color:       Red,
+					Color:       model.Red.Int(),
+					Footer:      model.DefaultFooter,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -135,12 +153,14 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					i.ChannelID,
 					reason,
 				),
-				Color:     Red,
+				Color:     model.Red.Int(),
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
-			utils.LogError(fmt.Sprintf("reportUser: Error sending message to mod channel: %s", err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+				Message: fmt.Sprintf("Error sending message to mod channel %s: %s", channelID, err),
+			})
 			continue
 		}
 	}
@@ -151,14 +171,16 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 			{
 				Title:       "Report",
 				Description: fmt.Sprintf("L'utilisateur %s a été signalé à la moderation", reportedUser.Username),
-				Color:       Green,
-				Footer:      &discordgo.MessageEmbedFooter{Text: "Merci de rendre ce serveur meilleur."},
+				Color:       model.Green.Int(),
+				Footer:      &discordgo.MessageEmbedFooter{Text: "Merci de rendre ce serveur plus sain."},
 				Timestamp:   time.Now().Format(time.RFC3339),
 			},
 		},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("reportUser: Error sending followup message: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
 	}
 }
 
@@ -171,16 +193,22 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 		},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("showHelp: Error deferring response: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showHelp()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
 		return
 	}
 
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s] asking for help", i.ApplicationCommandData().Name, i.Member.User.Username))
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showHelp()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	})
 
 	var fields []*discordgo.MessageEmbedField
 	commands, err := s.ApplicationCommands(d.client.State.User.ID, i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("showHelp: Error fetching application commands: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showHelp()",
+			Message: fmt.Sprintf("Error fetching application commands: %s", err),
+		})
 	}
 	for _, cmd := range commands {
 		var field discordgo.MessageEmbedField
@@ -220,9 +248,8 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 	embed := &discordgo.MessageEmbed{
 		Title:       "💡 Help",
 		Description: "Voici la liste des commandes disponibles :",
-		Color:       Blue,
+		Color:       model.Blue.Int(),
 		Fields:      fields,
-		Footer:      defaultFooter,
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
@@ -230,6 +257,8 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("showHelp: Error sending followup message: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showHelp()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
 	}
 }

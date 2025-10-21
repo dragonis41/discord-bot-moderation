@@ -2,13 +2,14 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 type LogsInterface interface {
-	AddLogEntry(guildID, logType, function, content string) error
+	AddLogEntry(guildID string, logType model.LogType, function string, content string) error
 	GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, error)
 	GetLogEntriesCount(guildID string) (int, error)
 	SetMaxLogEntries(guildID string, maxEntries int) error
@@ -37,7 +38,6 @@ func (d *Database) MigrateLogs() error {
 	);
 	`
 
-	utils.LogInfo("Running migration for logs table...")
 	_, err := d.db.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create logs table: %w", err)
@@ -58,7 +58,7 @@ func (d *Database) MigrateLogs() error {
 	createConfigTableQuery := `
 	CREATE TABLE IF NOT EXISTS logs_config (
 		guild_id TEXT PRIMARY KEY,
-		max_entries INTEGER DEFAULT 100
+		max_entries INTEGER DEFAULT 10000
 	);
 	`
 
@@ -66,17 +66,16 @@ func (d *Database) MigrateLogs() error {
 	if err != nil {
 		return fmt.Errorf("failed to create logs_config table: %w", err)
 	}
-	utils.LogSuccess("Migration for logs table completed successfully")
 
 	return nil
 }
 
-func (d *Database) AddLogEntry(guildID, logType, function, content string) error {
+func (d *Database) AddLogEntry(guildID string, logType model.LogType, function string, content string) error {
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.getMaxLogEntries(guildID)
 	if err != nil {
-		// If error or no config exists, use default of 100
-		maxEntries = 100
+		// If error or no config exists, use default of 10000
+		maxEntries = 10000
 	}
 
 	// Insert the new log entry
@@ -93,7 +92,6 @@ func (d *Database) AddLogEntry(guildID, logType, function, content string) error
 	// Clean up old entries if we exceed the limit
 	if err := d.cleanupOldLogEntries(guildID, maxEntries); err != nil {
 		// Log the error but don't fail the operation
-		// You might want to handle this differently based on your needs
 		return fmt.Errorf("log entry added but cleanup failed: %w", err)
 	}
 
@@ -134,8 +132,8 @@ func (d *Database) getMaxLogEntries(guildID string) (int, error) {
 	err := d.db.QueryRow(query, guildID).Scan(&maxEntries)
 	if err != nil {
 		// If no config exists, return default
-		if err == sql.ErrNoRows {
-			return 100, nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return 10000, nil
 		}
 		return 0, fmt.Errorf("failed to get max log entries: %w", err)
 	}

@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 func (d *Discord) sendRoleSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, roles []*discordgo.Role, page int) {
@@ -19,7 +20,9 @@ func (d *Discord) sendRoleSelectPage(s *discordgo.Session, interaction *discordg
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
 			Components: &components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendRoleSelectPage: Error updating message: %s", err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: interaction.GuildID, Function: "sendRoleSelectPage()",
+				Message: fmt.Sprintf("Error updating follow-up message: %s", err),
+			})
 		}
 	} else {
 		// Create new message
@@ -27,7 +30,9 @@ func (d *Discord) sendRoleSelectPage(s *discordgo.Session, interaction *discordg
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendRoleSelectPage: Error sending follow-up message: %s", err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: interaction.GuildID, Function: "sendRoleSelectPage()",
+				Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+			})
 		}
 	}
 }
@@ -42,7 +47,9 @@ func (d *Discord) buildRoleSelectMessage(guildID string, roles []*discordgo.Role
 	// Build select menu options
 	previouslySelected, err := d.db.GetModerationRolesByGuildId(guildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("buildRoleSelectMessage: Error fetching selected roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: guildID, Function: "buildRoleSelectMessage()",
+			Message: fmt.Sprintf("Error fetching selected roles: %s", err),
+		})
 	}
 	options := d.buildSelectRoleMenuOptions(roles[start:end], previouslySelected)
 
@@ -74,8 +81,8 @@ func (d *Discord) buildRoleSelectMessage(guildID string, roles []*discordgo.Role
 			"Ce sont les roles qui sont administrateurs du serveur et qui seront notifiés.\n\n"+
 			"⚠️ Attention, si vous ne possédez pas au moins un de ces rôles, vous ne pourrez plus utiliser les commandes d'administration !\n\n"+
 			"**%d**/**%d** Roles sélectionnés.", len(previouslySelected), len(roles)),
-		Color:     Blue,
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
+		Color:     model.Blue.Int(),
+		Footer:    model.SelectionMenuFooter,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
@@ -153,7 +160,9 @@ func (d *Discord) handleRoleSelection(s *discordgo.Session, i *discordgo.Interac
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Content: "Mise à jour..."},
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelection: Error responding: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelection()",
+			Message: fmt.Sprintf("Error responding to interaction: %s", err),
+		})
 		return
 	}
 
@@ -173,7 +182,9 @@ func (d *Discord) handleRoleSelectionUpdate(s *discordgo.Session, i *discordgo.I
 
 	roles, err := d.getRoles(s, i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelectionUpdate: Error fetching roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionUpdate()",
+			Message: fmt.Sprintf("Error fetching roles: %s", err),
+		})
 		return
 	}
 
@@ -190,7 +201,9 @@ func (d *Discord) handleRoleSelectionUpdate(s *discordgo.Session, i *discordgo.I
 	newSelections := make(map[string]bool)
 	selectedRoles, err := d.db.GetModerationRolesByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelectionUpdate: Error fetching selected roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionUpdate()",
+			Message: fmt.Sprintf("Error fetching selected roles: %s", err),
+		})
 	}
 	for _, id := range selectedRoles {
 		if !pageRoleIDs[id] {
@@ -204,12 +217,16 @@ func (d *Discord) handleRoleSelectionUpdate(s *discordgo.Session, i *discordgo.I
 	// Clear the database and re-add selections
 	err = d.db.RemoveModerationRolesByGuild(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelectionUpdate: Error clearing selected roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionUpdate()",
+			Message: fmt.Sprintf("Error clearing selected roles: %s", err),
+		})
 	}
 	for id := range newSelections {
 		err := d.db.AddModerationRole(i.GuildID, id)
 		if err != nil {
-			utils.LogError(fmt.Sprintf("handleRoleSelectionUpdate: Error adding selected role [%s]: %s", id, err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionUpdate()",
+				Message: fmt.Sprintf("Error adding selected role [%s]: %s", id, err),
+			})
 		}
 	}
 
@@ -234,14 +251,18 @@ func (d *Discord) handleRolePageNavigation(s *discordgo.Session, i *discordgo.In
 func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	selectedIDs, err := d.db.GetModerationRolesByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelectionDone: Error fetching selected roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionDone()",
+			Message: fmt.Sprintf("Error fetching selected roles: %s", err),
+		})
 	}
 	var roleNames []string
 
 	// Get all roles for the guild to ensure we have the latest data
 	allRoles, err := s.GuildRoles(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleRoleSelectionDone: Error fetching guild roles: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionDone()",
+			Message: fmt.Sprintf("Error fetching guild roles: %s", err),
+		})
 	} else {
 		// Create a map for quick lookup
 		roleMap := make(map[string]*discordgo.Role)
@@ -268,13 +289,16 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 		Embeds: &[]*discordgo.MessageEmbed{{
 			Title:       "Configuration terminée",
 			Description: description,
-			Color:       Green,
+			Color:       model.Green.Int(),
+			Footer:      model.DefaultFooter,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d moderator roles for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleRoleSelectionDone()",
+		Message: fmt.Sprintf("User [%s] finished selecting %d moderator roles for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID),
+	})
 }
 
 func (d *Discord) editRoleSelectMessage(s *discordgo.Session, i *discordgo.InteractionCreate, roles []*discordgo.Role, page int) {
@@ -285,6 +309,8 @@ func (d *Discord) editRoleSelectMessage(s *discordgo.Session, i *discordgo.Inter
 		Components: &components,
 		Content:    nil,
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("editRoleSelectMessage: Error editing message: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "editRoleSelectMessage()",
+			Message: fmt.Sprintf("Error editing message: %s", err),
+		})
 	}
 }

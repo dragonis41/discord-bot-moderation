@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 func (d *Discord) sendModChannelSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, channels []*discordgo.Channel, page int) {
@@ -19,7 +20,9 @@ func (d *Discord) sendModChannelSelectPage(s *discordgo.Session, interaction *di
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
 			Components: &components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendModChannelSelectPage: Error updating message: %s", err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: interaction.GuildID, Function: "sendModChannelSelectPage()",
+				Message: fmt.Sprintf("Error updating message: %s", err),
+			})
 		}
 	} else {
 		// Create new message
@@ -27,7 +30,9 @@ func (d *Discord) sendModChannelSelectPage(s *discordgo.Session, interaction *di
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendModChannelSelectPage: Error sending follow-up message: %s", err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: interaction.GuildID, Function: "sendModChannelSelectPage()",
+				Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+			})
 		}
 	}
 }
@@ -42,7 +47,9 @@ func (d *Discord) buildModChannelSelectMessage(guildID string, channels []*disco
 	// Build select menu options
 	previouslySelected, err := d.db.GetModerationChannelsByGuildId(guildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("buildModChannelSelectMessage: Error fetching selected channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: guildID, Function: "buildModChannelSelectMessage()",
+			Message: fmt.Sprintf("Error fetching selected channels: %s", err),
+		})
 	}
 	options := d.buildModChannelSelectMenuOptions(channels[start:end], previouslySelected)
 
@@ -73,8 +80,8 @@ func (d *Discord) buildModChannelSelectMessage(guildID string, channels []*disco
 		Description: fmt.Sprintf("Sélectionnez les salons de modération puis cliquez sur \"Terminer\".\n"+
 			"Ce sont les salons dans lesquels les modérateurs vont être notifiés.\n\n"+
 			"**%d**/**%d** salons sélectionnés.", len(previouslySelected), len(channels)),
-		Color:     Blue,
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
+		Color:     model.Blue.Int(),
+		Footer:    model.SelectionMenuFooter,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
@@ -154,7 +161,9 @@ func (d *Discord) handleModChannelSelection(s *discordgo.Session, i *discordgo.I
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Content: "Mise à jour..."},
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelection: Error responding: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelection()",
+			Message: fmt.Sprintf("Error responding to interaction: %s", err),
+		})
 		return
 	}
 
@@ -174,7 +183,9 @@ func (d *Discord) handleModChannelSelectionUpdate(s *discordgo.Session, i *disco
 
 	textChannels, err := d.getTextChannels(s, i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error fetching channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionUpdate()",
+			Message: fmt.Sprintf("Error fetching channels: %s", err),
+		})
 		return
 	}
 
@@ -191,7 +202,9 @@ func (d *Discord) handleModChannelSelectionUpdate(s *discordgo.Session, i *disco
 	newSelections := make(map[string]bool)
 	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error fetching selected channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionUpdate()",
+			Message: fmt.Sprintf("Error fetching selected channels: %s", err),
+		})
 	}
 	for _, id := range selectedChannels {
 		if !pageChannelIDs[id] {
@@ -205,12 +218,16 @@ func (d *Discord) handleModChannelSelectionUpdate(s *discordgo.Session, i *disco
 	// Clear the database and re-add selections
 	err = d.db.RemoveModerationChannelsByGuild(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error clearing selected channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionUpdate()",
+			Message: fmt.Sprintf("Error clearing selected channels: %s", err),
+		})
 	}
 	for id := range newSelections {
 		err := d.db.AddModerationChannel(i.GuildID, id)
 		if err != nil {
-			utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error adding selected channel [%s]: %s", id, err))
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionUpdate()",
+				Message: fmt.Sprintf("Error adding selected channel [%s]: %s", id, err),
+			})
 		}
 	}
 
@@ -235,14 +252,18 @@ func (d *Discord) handleModChannelPageNavigation(s *discordgo.Session, i *discor
 func (d *Discord) handleModChannelSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	selectedIDs, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelectionDone: Error fetching selected channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionDone()",
+			Message: fmt.Sprintf("Error fetching selected channels: %s", err),
+		})
 	}
 	var channelNames []string
 
 	// Get all channels for the guild to ensure we have the latest data
 	allChannels, err := s.GuildChannels(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleModChannelSelectionDone: Error fetching guild channels: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionDone()",
+			Message: fmt.Sprintf("Error fetching guild channels: %s", err),
+		})
 	} else {
 		// Create a map for quick lookup
 		channelMap := make(map[string]*discordgo.Channel)
@@ -269,13 +290,16 @@ func (d *Discord) handleModChannelSelectionDone(s *discordgo.Session, i *discord
 		Embeds: &[]*discordgo.MessageEmbed{{
 			Title:       "Configuration terminée",
 			Description: description,
-			Color:       Green,
+			Color:       model.Green.Int(),
+			Footer:      model.DefaultFooter,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d mod channels for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "handleModChannelSelectionDone()",
+		Message: fmt.Sprintf("User [%s] finished selecting %d mod channels for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID),
+	})
 }
 
 func (d *Discord) editModChannelSelectMessage(s *discordgo.Session, i *discordgo.InteractionCreate, channels []*discordgo.Channel, page int) {
@@ -286,6 +310,8 @@ func (d *Discord) editModChannelSelectMessage(s *discordgo.Session, i *discordgo
 		Components: &components,
 		Content:    nil,
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("editModChannelSelectMessage: Error editing message: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "editModChannelSelectMessage()",
+			Message: fmt.Sprintf("Error editing message: %s", err),
+		})
 	}
 }

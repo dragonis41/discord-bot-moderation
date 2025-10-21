@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
@@ -45,13 +46,17 @@ func (d *Discord) RunDiscordBot() {
 	// open session
 	err := d.client.Open()
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Error opening Discord session: %s", err))
+		d.log.LogError(logger.LogModel{Function: "selectLogChannels()",
+			Message: fmt.Sprintf("Error opening Discord session: %s", err),
+		})
 		return
 	}
 	defer func(discordClient *discordgo.Session) {
 		err := discordClient.Close()
 		if err != nil {
-			utils.LogWarning(fmt.Sprintf("Error while closing the Discord session: %s", err))
+			d.log.LogWarning(logger.LogModel{Function: "RunDiscordBot()",
+				Message: fmt.Sprintf("Error while closing the Discord session: %s", err),
+			})
 		}
 	}(d.client) // close session, after function termination
 
@@ -63,14 +68,18 @@ func (d *Discord) RunDiscordBot() {
 
 	// Initialize system stats
 	if err := utils.InitSystemStats(); err != nil {
-		utils.LogWarning(fmt.Sprintf("Failed to initialize system stats: %v", err))
+		d.log.LogWarning(logger.LogModel{Function: "RunDiscordBot()",
+			Message: fmt.Sprintf("Failed to initialize system stats: %v", err),
+		})
 	}
 
 	// Set default max log entries for each connected guild
 	for _, guild := range d.client.State.Guilds {
-		err := d.db.SetMaxLogEntries(guild.ID, 100)
+		err := d.db.SetMaxLogEntries(guild.ID, 10000)
 		if err != nil {
-			utils.LogWarning(fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err))
+			d.log.LogWarning(logger.LogModel{Function: "RunDiscordBot()",
+				Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
+			})
 		}
 	}
 
@@ -134,9 +143,13 @@ func (d *Discord) registerSlashCommands() {
 	for _, guild := range d.client.State.Guilds {
 		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, commands)
 		if err != nil {
-			utils.LogError(fmt.Sprintf("Cannot register commands for guild %s: %v", guild.ID, err))
+			d.log.LogError(logger.LogModel{Function: "registerSlashCommands()",
+				Message: fmt.Sprintf("Cannot register commands for guild %s: %v", guild.ID, err),
+			})
 		} else {
-			utils.LogSuccess(fmt.Sprintf("Registered all slash commands for guild %s", guild.ID))
+			d.log.LogSuccess(logger.LogModel{Function: "registerSlashCommands()",
+				Message: fmt.Sprintf("Registered all slash commands for guild %s", guild.ID),
+			})
 		}
 	}
 }
@@ -171,9 +184,13 @@ func (d *Discord) removeSlashCommands() {
 		// Pass an empty slice to remove all commands
 		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, []*discordgo.ApplicationCommand{})
 		if err != nil {
-			utils.LogWarning(fmt.Sprintf("Cannot remove commands from guild %s: %v", guild.ID, err))
+			d.log.LogWarning(logger.LogModel{Function: "removeSlashCommands()",
+				Message: fmt.Sprintf("Cannot remove commands from guild %s: %v", guild.ID, err),
+			})
 		} else {
-			utils.LogSuccess(fmt.Sprintf("Removed all slash commands from guild %s", guild.ID))
+			d.log.LogSuccess(logger.LogModel{Function: "removeSlashCommands()",
+				Message: fmt.Sprintf("Removed all slash commands from guild %s", guild.ID),
+			})
 		}
 	}
 }

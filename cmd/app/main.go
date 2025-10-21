@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
 	"github.com/dragonis41/discord-bot-moderation/pkg/api"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -16,28 +17,34 @@ func init() {
 }
 
 func main() {
+	l := logger.NewLogger()
+
 	db, err := database.NewDatabase()
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Error while initializing the database: %s", err))
+		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while initializing the database: %s", err)})
 		return
 	}
+
+	l.LogInfo(logger.LogModel{Message: "Starting database migration..."})
 	if err := db.Migrate(); err != nil {
-		utils.LogError(fmt.Sprintf("Error while migrating the database: %s", err))
+		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while migrating the database: %s", err)})
 		return
 	}
+	l.LogSuccess(logger.LogModel{Message: "Database initialized successfully"})
 
 	// Create the Discord client
 	discordClient, err := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN"))
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Error while creating the Discord client: %s", err))
+		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while creating the Discord client: %s", err)})
 		return
 	}
 
-	client := api.NewClient(db, discordClient)
+	client := api.NewClient(l, db, discordClient)
 	client.RunDiscordBot()
 
 	if err := db.CloseDatabase(); err != nil {
-		utils.LogWarning(fmt.Sprintf("Error while closing the database: %s\n", err))
+		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while closing the database connection: %s", err)})
 	}
+	l.LogSuccess(logger.LogModel{Message: "Database connection closed successfully\n"})
 	fmt.Printf("The bot is now shut down\n\n")
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 const channelsPerPage = 25
@@ -15,7 +16,7 @@ func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interactio
 		Embeds: []*discordgo.MessageEmbed{{
 			Title:       title,
 			Description: description,
-			Color:       Red,
+			Color:       model.Red.Int(),
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 	})

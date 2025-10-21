@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
-	selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
-	selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
-	selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -24,11 +23,15 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("showStatus: Error deferring response: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
 		return
 	}
 
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username))
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username),
+	})
 
 	if !d.db.CheckAdminPermission(s, i) {
 		return
@@ -50,8 +53,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		if guild.Name == "" {
 			fullGuild, err := d.client.Guild(guild.ID)
 			if err != nil {
-				fmt.Printf("Server: [<error fetching>] (ID: %s)\n", guild.ID)
-				continue
+				guild.Name = "<error fetching>"
 			}
 			guild = fullGuild
 		}
@@ -109,7 +111,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	if err == nil && len(last10Errors) > 0 {
 		errorMessages := ""
 		for _, entry := range last10Errors {
-			if entry.LogType == utils.ErrorType {
+			if entry.LogType == model.ErrorType.String() {
 				errorMessages += fmt.Sprintf("- [%s] %s : %s\n", entry.CreatedAt, entry.Function, entry.Content)
 			}
 		}
@@ -126,95 +128,16 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		Embeds: []*discordgo.MessageEmbed{
 			{
 				Title:     "Status",
-				Color:     Green,
+				Color:     model.Green.Int(),
 				Fields:    fields,
-				Footer:    defaultFooter,
+				Footer:    model.DefaultFooter,
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 		},
 	})
 	if err != nil {
-		utils.LogError(fmt.Sprintf("showStatus: Error sending follow-up message: %s", err))
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
 	}
-}
-
-func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
-	}); err != nil {
-		utils.LogError(fmt.Sprintf("selectLogChannels: Error deferring response: %s", err))
-		return
-	}
-
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
-
-	if !d.db.CheckAdminPermission(s, i) {
-		return
-	}
-
-	// Get text channels
-	textChannels, err := d.getTextChannels(s, i.GuildID)
-	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
-		return
-	}
-
-	// Start with page 0
-	d.sendLogChannelSelectPage(s, i.Interaction, textChannels, 0)
-}
-
-func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
-	}); err != nil {
-		utils.LogError(fmt.Sprintf("selectModeratorChannels: Error deferring response: %s", err))
-		return
-	}
-
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
-
-	if !d.db.CheckAdminPermission(s, i) {
-		return
-	}
-
-	// Get text channels
-	textChannels, err := d.getTextChannels(s, i.GuildID)
-	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
-		return
-	}
-
-	// Start with page 0
-	d.sendModChannelSelectPage(s, i.Interaction, textChannels, 0)
-}
-
-func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
-	}); err != nil {
-		utils.LogError(fmt.Sprintf("selectModeratorRoles: Error deferring response: %s", err))
-		return
-	}
-
-	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
-
-	if !d.db.CheckAdminPermission(s, i) {
-		return
-	}
-
-	// Get roles
-	roles, err := d.getRoles(s, i.GuildID)
-	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des roles", "Une erreur est survenue lors de la récupération des roles.")
-		return
-	}
-
-	// Start with page 0
-	d.sendRoleSelectPage(s, i.Interaction, roles, 0)
 }
