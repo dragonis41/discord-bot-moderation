@@ -39,5 +39,5 @@ func main() {
 	if err := db.CloseDatabase(); err != nil {
 		utils.LogWarning(fmt.Sprintf("Error while closing the database: %s\n", err))
 	}
-	fmt.Printf("\nThe bot now shut down\n")
+	fmt.Printf("The bot is now shut down\n\n")
 }

@@ -9,10 +9,8 @@ services:
     environment:
       # Discord configuration
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-
-    # Create a volume for the file sqlite3.db
     volumes:
-      - ./sqlite3.db:/app/sqlite3.db
+      - ./data:/app/data
     # Resource limits
     #deploy:
     #  resources:

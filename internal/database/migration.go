@@ -5,13 +5,18 @@ import (
 )
 
 func (d *Database) Migrate() error {
+	utils.LogInfo("Starting database migration...")
+
+	if err := d.MigrateLogs(); err != nil {
+		return err
+	}
+	if err := d.MigrateLogChannel(); err != nil {
+		return err
+	}
 	if err := d.MigrateModerationChannel(); err != nil {
 		return err
 	}
 	if err := d.MigrateModerationRole(); err != nil {
-		return err
-	}
-	if err := d.MigrateLogs(); err != nil {
 		return err
 	}
 

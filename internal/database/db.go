@@ -1,9 +1,10 @@
 package database
 
-// Create a database that use SQLite to store data
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -20,7 +21,15 @@ type Database struct {
 }
 
 func NewDatabase() (*Database, error) {
-	db, err := sql.Open("sqlite3", "sqlite3.db")
+	// Create the ./data directory if it doesn't exist
+	if _, err := os.Stat("data"); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir("data", os.ModePerm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create data directory: %w", err)
+		}
+	}
+
+	db, err := sql.Open("sqlite3", "./data/sqlite3.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

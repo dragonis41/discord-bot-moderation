@@ -16,20 +16,20 @@ type DiscordHandlerInterface interface {
 }
 
 func (d *Discord) displayConnectedGuilds() {
-	fmt.Printf("\n======= Connected Servers =======\n")
+	fmt.Printf("\n============== Connected Servers ==============\n")
 	for _, guild := range d.client.State.Guilds {
 		// Fetch full guild data if name is empty
 		if guild.Name == "" {
 			fullGuild, err := d.client.Guild(guild.ID)
 			if err != nil {
-				fmt.Printf("Server: [<error fetching>] (ID: %s)\n", guild.ID)
+				fmt.Printf("- [<error fetching>] (ID: %s)\n", guild.ID)
 				continue
 			}
 			guild = fullGuild
 		}
-		fmt.Printf("Server: [%s] (ID: %s)\n", guild.Name, guild.ID)
+		fmt.Printf("- [%s] (ID: %s)\n", guild.Name, guild.ID)
 	}
-	fmt.Printf("=================================\n\n")
+	fmt.Printf("===============================================\n\n")
 }
 
 func (d *Discord) RunDiscordBot() {
@@ -37,9 +37,10 @@ func (d *Discord) RunDiscordBot() {
 	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	// add an event handler for slash commands
-	d.client.AddHandler(d.slashCommandHandler)
-	d.client.AddHandler(d.handleChannelSelection)
-	d.client.AddHandler(d.handleRoleSelection)
+	d.client.AddHandler(d.slashCommandHandler)       // Handler for slash commands
+	d.client.AddHandler(d.handleLogChannelSelection) // Handler for message component interaction for log channel selection
+	d.client.AddHandler(d.handleModChannelSelection) // Handler for message component interaction for moderation channel selection
+	d.client.AddHandler(d.handleRoleSelection)       // Handler for message component interaction for role selection
 
 	// open session
 	err := d.client.Open()
@@ -112,8 +113,12 @@ func (d *Discord) registerSlashCommands() {
 			Description: "Affiche le statut du bot",
 		},
 		{
-			Name:        "set-moderation-channels",
+			Name:        "set-log-channels",
 			Description: "Sélectionne les canaux où les rapports de modération seront envoyés",
+		},
+		{
+			Name:        "set-moderation-channels",
+			Description: "Sélectionne les canaux où les signalements seront envoyés",
 		},
 		{
 			Name:        "set-moderation-roles",
@@ -147,6 +152,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.reportUser(s, i)
 	case "status":
 		d.showStatus(s, i)
+	case "set-log-channels":
+		d.selectLogChannels(s, i)
 	case "set-moderation-channels":
 		d.selectModeratorChannels(s, i)
 	case "set-moderation-roles":

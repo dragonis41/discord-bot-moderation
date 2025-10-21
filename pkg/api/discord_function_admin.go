@@ -122,6 +122,33 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 }
 
+func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+	}); err != nil {
+		utils.LogError(fmt.Sprintf("selectLogChannels: Error deferring response: %s", err))
+		return
+	}
+
+	utils.LogInfo(fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username))
+
+	if !d.db.CheckAdminPermission(s, i) {
+		return
+	}
+
+	// Get text channels
+	textChannels, err := d.getTextChannels(s, i.GuildID)
+	if err != nil {
+		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
+		return
+	}
+
+	// Start with page 0
+	d.sendLogChannelSelectPage(s, i.Interaction, textChannels, 0)
+}
+
 func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Defer the response
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -146,7 +173,7 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 	}
 
 	// Start with page 0
-	d.sendChannelSelectPage(s, i.Interaction, textChannels, 0)
+	d.sendModChannelSelectPage(s, i.Interaction, textChannels, 0)
 }
 
 func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate) {

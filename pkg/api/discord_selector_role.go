@@ -10,20 +10,6 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
-func (d *Discord) getRoles(s *discordgo.Session, guildID string) ([]*discordgo.Role, error) {
-	roles, err := s.GuildRoles(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Sort roles by position
-	sort.Slice(roles, func(i, j int) bool {
-		return roles[i].Position < roles[j].Position
-	})
-
-	return roles, nil
-}
-
 func (d *Discord) sendRoleSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, roles []*discordgo.Role, page int) {
 	embed, components := d.buildRoleSelectMessage(interaction.GuildID, roles, page)
 
@@ -245,14 +231,14 @@ func (d *Discord) handleRolePageNavigation(s *discordgo.Session, i *discordgo.In
 func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	selectedIDs, err := d.db.GetModerationRolesByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleSelectionDone: Error fetching selected roles: %s", err))
+		utils.LogError(fmt.Sprintf("handleRoleSelectionDone: Error fetching selected roles: %s", err))
 	}
 	var roleNames []string
 
 	// Get all roles for the guild to ensure we have the latest data
 	allRoles, err := s.GuildRoles(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleSelectionDone: Error fetching guild roles: %s", err))
+		utils.LogError(fmt.Sprintf("handleRoleSelectionDone: Error fetching guild roles: %s", err))
 	} else {
 		// Create a map for quick lookup
 		roleMap := make(map[string]*discordgo.Role)
@@ -285,7 +271,7 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d roles for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
+	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d moderator roles for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
 }
 
 func (d *Discord) editRoleSelectMessage(s *discordgo.Session, i *discordgo.InteractionCreate, roles []*discordgo.Role, page int) {

@@ -25,13 +25,13 @@ FROM alpine:latest
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates sqlite-libs
 
-WORKDIR /root/
+WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/discord-bot-moderation .
 
-# Create directory for SQLite database
-RUN mkdir -p /data
+# Create the database if it doesn't exist
+RUN mkdir -p /app/data
 
 # Run the binary
 CMD ["./discord-bot-moderation"]

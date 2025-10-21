@@ -10,29 +10,8 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
-func (d *Discord) getTextChannels(s *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
-	channels, err := s.GuildChannels(guildID)
-	if err != nil {
-		return nil, err
-	}
-
-	var textChannels []*discordgo.Channel
-	for _, channel := range channels {
-		if channel.Type == discordgo.ChannelTypeGuildText {
-			textChannels = append(textChannels, channel)
-		}
-	}
-
-	// Sort channels by position
-	sort.Slice(textChannels, func(i, j int) bool {
-		return textChannels[i].Position < textChannels[j].Position
-	})
-
-	return textChannels, nil
-}
-
-func (d *Discord) sendChannelSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, channels []*discordgo.Channel, page int) {
-	embed, components := d.buildChannelSelectMessage(interaction.GuildID, channels, page)
+func (d *Discord) sendModChannelSelectPage(s *discordgo.Session, interaction *discordgo.Interaction, channels []*discordgo.Channel, page int) {
+	embed, components := d.buildModChannelSelectMessage(interaction.GuildID, channels, page)
 
 	if interaction.Message != nil {
 		// Update existing message
@@ -40,7 +19,7 @@ func (d *Discord) sendChannelSelectPage(s *discordgo.Session, interaction *disco
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
 			Components: &components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendChannelSelectPage: Error updating message: %s", err))
+			utils.LogError(fmt.Sprintf("sendModChannelSelectPage: Error updating message: %s", err))
 		}
 	} else {
 		// Create new message
@@ -48,12 +27,12 @@ func (d *Discord) sendChannelSelectPage(s *discordgo.Session, interaction *disco
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		}); err != nil {
-			utils.LogError(fmt.Sprintf("sendChannelSelectPage: Error sending follow-up message: %s", err))
+			utils.LogError(fmt.Sprintf("sendModChannelSelectPage: Error sending follow-up message: %s", err))
 		}
 	}
 }
 
-func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordgo.Channel, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+func (d *Discord) buildModChannelSelectMessage(guildID string, channels []*discordgo.Channel, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	totalPages := (len(channels) + channelsPerPage - 1) / channelsPerPage
 	page = max(0, min(page, totalPages-1))
 
@@ -63,9 +42,9 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	// Build select menu options
 	previouslySelected, err := d.db.GetModerationChannelsByGuildId(guildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("buildChannelSelectMessage: Error fetching selected channels: %s", err))
+		utils.LogError(fmt.Sprintf("buildModChannelSelectMessage: Error fetching selected channels: %s", err))
 	}
-	options := d.buildChannelSelectMenuOptions(channels[start:end], previouslySelected)
+	options := d.buildModChannelSelectMenuOptions(channels[start:end], previouslySelected)
 
 	// Create components
 	minVal := 0
@@ -73,7 +52,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
-					CustomID:    fmt.Sprintf("channel_select_menu_%d", page),
+					CustomID:    fmt.Sprintf("mod_channel_select_menu_%d", page),
 					Placeholder: "Sélectionnez les salons de modération",
 					MinValues:   &minVal,
 					MaxValues:   len(options),
@@ -84,7 +63,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	}
 
 	// Add navigation buttons
-	buttons := d.buildChannelNavigationButtons(page, totalPages)
+	buttons := d.buildModChannelNavigationButtons(page, totalPages)
 	if len(buttons) > 0 {
 		components = append(components, discordgo.ActionsRow{Components: buttons})
 	}
@@ -100,7 +79,7 @@ func (d *Discord) buildChannelSelectMessage(guildID string, channels []*discordg
 	return embed, components
 }
 
-func (d *Discord) buildChannelSelectMenuOptions(channels []*discordgo.Channel, selectedIDs []string) []discordgo.SelectMenuOption {
+func (d *Discord) buildModChannelSelectMenuOptions(channels []*discordgo.Channel, selectedIDs []string) []discordgo.SelectMenuOption {
 	selectedMap := make(map[string]bool)
 	for _, id := range selectedIDs {
 		selectedMap[id] = true
@@ -119,7 +98,7 @@ func (d *Discord) buildChannelSelectMenuOptions(channels []*discordgo.Channel, s
 	return options
 }
 
-func (d *Discord) buildChannelNavigationButtons(page, totalPages int) []discordgo.MessageComponent {
+func (d *Discord) buildModChannelNavigationButtons(page, totalPages int) []discordgo.MessageComponent {
 	var buttons []discordgo.MessageComponent
 
 	if totalPages > 1 {
@@ -127,7 +106,7 @@ func (d *Discord) buildChannelNavigationButtons(page, totalPages int) []discordg
 			discordgo.Button{
 				Label:    "◀️ Précédent",
 				Style:    discordgo.PrimaryButton,
-				CustomID: fmt.Sprintf("channel_page_prev_%d", page),
+				CustomID: fmt.Sprintf("mod_channel_page_prev_%d", page),
 				Disabled: page == 0,
 			},
 			discordgo.Button{
@@ -139,7 +118,7 @@ func (d *Discord) buildChannelNavigationButtons(page, totalPages int) []discordg
 			discordgo.Button{
 				Label:    "Suivant ▶️",
 				Style:    discordgo.PrimaryButton,
-				CustomID: fmt.Sprintf("channel_page_next_%d", page),
+				CustomID: fmt.Sprintf("mod_channel_page_next_%d", page),
 				Disabled: page == totalPages-1,
 			},
 		)
@@ -149,13 +128,13 @@ func (d *Discord) buildChannelNavigationButtons(page, totalPages int) []discordg
 	buttons = append(buttons, discordgo.Button{
 		Label:    "✅ Terminer",
 		Style:    discordgo.SuccessButton,
-		CustomID: "channel_select_done",
+		CustomID: "mod_channel_select_done",
 	})
 
 	return buttons
 }
 
-func (d *Discord) handleChannelSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) handleModChannelSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Check if this is a message component interaction
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
@@ -164,7 +143,7 @@ func (d *Discord) handleChannelSelection(s *discordgo.Session, i *discordgo.Inte
 	data := i.MessageComponentData()
 	customID := data.CustomID
 
-	if !strings.HasPrefix(customID, "channel_select") && !strings.HasPrefix(customID, "channel_page") {
+	if !strings.HasPrefix(customID, "mod_channel_select") && !strings.HasPrefix(customID, "mod_channel_page") {
 		return
 	}
 
@@ -173,27 +152,27 @@ func (d *Discord) handleChannelSelection(s *discordgo.Session, i *discordgo.Inte
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Content: "Mise à jour..."},
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("handleChannelSelection: Error responding: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelection: Error responding: %s", err))
 		return
 	}
 
 	switch {
-	case strings.HasPrefix(customID, "channel_select_menu_"):
-		d.handleChannelSelectionUpdate(s, i, data.Values)
-	case strings.HasPrefix(customID, "channel_page_"):
-		d.handleChannelPageNavigation(s, i, customID)
-	case customID == "channel_select_done":
-		d.handleChannelSelectionDone(s, i)
+	case strings.HasPrefix(customID, "mod_channel_select_menu_"):
+		d.handleModChannelSelectionUpdate(s, i, data.Values)
+	case strings.HasPrefix(customID, "mod_channel_page_"):
+		d.handleModChannelPageNavigation(s, i, customID)
+	case customID == "mod_channel_select_done":
+		d.handleModChannelSelectionDone(s, i)
 	}
 }
 
-func (d *Discord) handleChannelSelectionUpdate(s *discordgo.Session, i *discordgo.InteractionCreate, selectedOnPage []string) {
+func (d *Discord) handleModChannelSelectionUpdate(s *discordgo.Session, i *discordgo.InteractionCreate, selectedOnPage []string) {
 	var page int
-	_, _ = fmt.Sscanf(i.MessageComponentData().CustomID, "channel_select_menu_%d", &page)
+	_, _ = fmt.Sscanf(i.MessageComponentData().CustomID, "mod_channel_select_menu_%d", &page)
 
 	textChannels, err := d.getTextChannels(s, i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error fetching channels: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error fetching channels: %s", err))
 		return
 	}
 
@@ -210,7 +189,7 @@ func (d *Discord) handleChannelSelectionUpdate(s *discordgo.Session, i *discordg
 	newSelections := make(map[string]bool)
 	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error fetching selected channels: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error fetching selected channels: %s", err))
 	}
 	for _, id := range selectedChannels {
 		if !pageChannelIDs[id] {
@@ -224,44 +203,44 @@ func (d *Discord) handleChannelSelectionUpdate(s *discordgo.Session, i *discordg
 	// Clear the database and re-add selections
 	err = d.db.RemoveModerationChannelsByGuild(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error clearing selected channels: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error clearing selected channels: %s", err))
 	}
 	for id := range newSelections {
 		err := d.db.AddModerationChannel(i.GuildID, id)
 		if err != nil {
-			utils.LogError(fmt.Sprintf("handleChannelSelectionUpdate: Error adding selected channel [%s]: %s", id, err))
+			utils.LogError(fmt.Sprintf("handleModChannelSelectionUpdate: Error adding selected channel [%s]: %s", id, err))
 		}
 	}
 
-	d.editChannelSelectMessage(s, i, textChannels, page)
+	d.editModChannelSelectMessage(s, i, textChannels, page)
 }
 
-func (d *Discord) handleChannelPageNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {
+func (d *Discord) handleModChannelPageNavigation(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) {
 	var currentPage int
 
 	if strings.Contains(customID, "prev") {
-		_, _ = fmt.Sscanf(customID, "channel_page_prev_%d", &currentPage)
+		_, _ = fmt.Sscanf(customID, "mod_channel_page_prev_%d", &currentPage)
 		currentPage--
 	} else {
-		_, _ = fmt.Sscanf(customID, "channel_page_next_%d", &currentPage)
+		_, _ = fmt.Sscanf(customID, "mod_channel_page_next_%d", &currentPage)
 		currentPage++
 	}
 
 	textChannels, _ := d.getTextChannels(s, i.GuildID)
-	d.editChannelSelectMessage(s, i, textChannels, currentPage)
+	d.editModChannelSelectMessage(s, i, textChannels, currentPage)
 }
 
-func (d *Discord) handleChannelSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) handleModChannelSelectionDone(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	selectedIDs, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleSelectionDone: Error fetching selected channels: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelectionDone: Error fetching selected channels: %s", err))
 	}
 	var channelNames []string
 
 	// Get all channels for the guild to ensure we have the latest data
 	allChannels, err := s.GuildChannels(i.GuildID)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("handleSelectionDone: Error fetching guild channels: %s", err))
+		utils.LogError(fmt.Sprintf("handleModChannelSelectionDone: Error fetching guild channels: %s", err))
 	} else {
 		// Create a map for quick lookup
 		channelMap := make(map[string]*discordgo.Channel)
@@ -294,17 +273,17 @@ func (d *Discord) handleChannelSelectionDone(s *discordgo.Session, i *discordgo.
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d channels for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
+	utils.LogInfo(fmt.Sprintf("User [%s] finished selecting %d mod channels for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID))
 }
 
-func (d *Discord) editChannelSelectMessage(s *discordgo.Session, i *discordgo.InteractionCreate, channels []*discordgo.Channel, page int) {
-	embed, components := d.buildChannelSelectMessage(i.GuildID, channels, page)
+func (d *Discord) editModChannelSelectMessage(s *discordgo.Session, i *discordgo.InteractionCreate, channels []*discordgo.Channel, page int) {
+	embed, components := d.buildModChannelSelectMessage(i.GuildID, channels, page)
 
 	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &components,
 		Content:    nil,
 	}); err != nil {
-		utils.LogError(fmt.Sprintf("editChannelSelectMessage: Error editing message: %s", err))
+		utils.LogError(fmt.Sprintf("editModChannelSelectMessage: Error editing message: %s", err))
 	}
 }
