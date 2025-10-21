@@ -48,7 +48,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 				{
 					Title:       "Report",
 					Description: "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer.",
-					Color:       red,
+					Color:       Red,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -75,7 +75,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 				{
 					Title:       "Report",
 					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-					Color:       red,
+					Color:       Red,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -101,7 +101,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 				{
 					Title:       "Report",
 					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-					Color:       red,
+					Color:       Red,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -117,7 +117,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 				{
 					Title:       "Report",
 					Description: "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
-					Color:       red,
+					Color:       Red,
 					Timestamp:   time.Now().Format(time.RFC3339),
 				},
 			},
@@ -135,7 +135,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					i.ChannelID,
 					reason,
 				),
-				Color:     red,
+				Color:     Red,
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 		})
@@ -151,7 +151,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 			{
 				Title:       "Report",
 				Description: fmt.Sprintf("L'utilisateur %s a été signalé à la moderation", reportedUser.Username),
-				Color:       green,
+				Color:       Green,
 				Footer:      &discordgo.MessageEmbedFooter{Text: "Merci de rendre ce serveur meilleur."},
 				Timestamp:   time.Now().Format(time.RFC3339),
 			},
@@ -220,7 +220,7 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 	embed := &discordgo.MessageEmbed{
 		Title:       "💡 Help",
 		Description: "Voici la liste des commandes disponibles :",
-		Color:       blue,
+		Color:       Blue,
 		Fields:      fields,
 		Footer:      defaultFooter,
 		Timestamp:   time.Now().Format(time.RFC3339),

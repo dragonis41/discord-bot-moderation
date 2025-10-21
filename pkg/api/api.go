@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	red   = 0xff0000
-	green = 0x00dd00
-	blue  = 0x0099ff
+	Red   = 0xff0000
+	Green = 0x00dd00
+	Blue  = 0x0099ff
 
 	defaultFooter = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
 )

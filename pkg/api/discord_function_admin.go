@@ -10,6 +10,7 @@ import (
 
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
+	selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
 	selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
 	selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
@@ -104,13 +105,28 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 
-	// TODO : Also show the last errors in the logs
+	last10Errors, err := d.db.GetLogEntriesByGuild(i.GuildID, 10)
+	if err == nil && len(last10Errors) > 0 {
+		errorMessages := ""
+		for _, entry := range last10Errors {
+			if entry.LogType == utils.ErrorType {
+				errorMessages += fmt.Sprintf("- [%s] %s : %s\n", entry.CreatedAt, entry.Function, entry.Content)
+			}
+		}
+		if errorMessages != "" {
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   "10 dernières erreurs",
+				Value:  errorMessages,
+				Inline: false,
+			})
+		}
+	}
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
 			{
 				Title:     "Status",
-				Color:     green,
+				Color:     Green,
 				Fields:    fields,
 				Footer:    defaultFooter,
 				Timestamp: time.Now().Format(time.RFC3339),

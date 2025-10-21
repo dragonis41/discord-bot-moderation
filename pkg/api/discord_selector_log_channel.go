@@ -69,11 +69,13 @@ func (d *Discord) buildLogChannelSelectMessage(guildID string, channels []*disco
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Sélection des salons",
-		Description: fmt.Sprintf("Sélectionnez les salons de logs puis cliquez sur \"Terminer\".\nCe sont les salons dans lesquels les actions de modération vont être loggées.\n\n**%d**/**%d** salons sélectionnés.", len(previouslySelected), len(channels)),
-		Color:       blue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Title: "Sélection des salons",
+		Description: fmt.Sprintf("Sélectionnez les salons de logs puis cliquez sur \"Terminer\".\n"+
+			"Ce sont les salons dans lesquels les actions de modération vont être loggées.\n\n"+
+			"**%d**/**%d** salons sélectionnés.", len(previouslySelected), len(channels)),
+		Color:     Blue,
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	return embed, components
@@ -251,7 +253,7 @@ func (d *Discord) handleLogChannelSelectionDone(s *discordgo.Session, i *discord
 		// Build the list of selected channel names
 		for _, channelID := range selectedIDs {
 			if channel, exists := channelMap[channelID]; exists && channel.Type == discordgo.ChannelTypeGuildText {
-				channelNames = append(channelNames, fmt.Sprintf("#%s", channel.Name))
+				channelNames = append(channelNames, fmt.Sprintf("- #%s", channel.Name))
 			}
 		}
 	}
@@ -267,7 +269,7 @@ func (d *Discord) handleLogChannelSelectionDone(s *discordgo.Session, i *discord
 		Embeds: &[]*discordgo.MessageEmbed{{
 			Title:       "Configuration terminée",
 			Description: description,
-			Color:       green,
+			Color:       Green,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 		Components: &[]discordgo.MessageComponent{},

@@ -15,7 +15,7 @@ func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interactio
 		Embeds: []*discordgo.MessageEmbed{{
 			Title:       title,
 			Description: description,
-			Color:       red,
+			Color:       Red,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 	})

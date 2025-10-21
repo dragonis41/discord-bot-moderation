@@ -69,11 +69,14 @@ func (d *Discord) buildRoleSelectMessage(guildID string, roles []*discordgo.Role
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Sélection des roles",
-		Description: fmt.Sprintf("Sélectionnez les roles de modération puis cliquez sur \"Terminer\".\nCe sont les roles qui sont administrateurs du serveur et qui seront notifiés.\n\n**%d**/**%d** Roles sélectionnés.", len(previouslySelected), len(roles)),
-		Color:       blue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Title: "Sélection des roles",
+		Description: fmt.Sprintf("Sélectionnez les roles de modération puis cliquez sur \"Terminer\".\n"+
+			"Ce sont les roles qui sont administrateurs du serveur et qui seront notifiés.\n\n"+
+			"⚠️ Attention, si vous ne possédez pas au moins un de ces rôles, vous ne pourrez plus utiliser les commandes d'administration !\n\n"+
+			"**%d**/**%d** Roles sélectionnés.", len(previouslySelected), len(roles)),
+		Color:     Blue,
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	return embed, components
@@ -249,7 +252,7 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 		// Build the list of selected role names
 		for _, roleID := range selectedIDs {
 			if role, exists := roleMap[roleID]; exists {
-				roleNames = append(roleNames, fmt.Sprintf("#%s", role.Name))
+				roleNames = append(roleNames, fmt.Sprintf("- @%s", role.Name))
 			}
 		}
 	}
@@ -265,7 +268,7 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 		Embeds: &[]*discordgo.MessageEmbed{{
 			Title:       "Configuration terminée",
 			Description: description,
-			Color:       green,
+			Color:       Green,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 		Components: &[]discordgo.MessageComponent{},
