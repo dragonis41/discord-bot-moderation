@@ -51,7 +51,7 @@ func (d *Discord) getRoles(s *discordgo.Session, guildID string) ([]*discordgo.R
 
 	// Sort roles by position
 	sort.Slice(roles, func(i, j int) bool {
-		return roles[i].Position < roles[j].Position
+		return roles[i].Position > roles[j].Position
 	})
 
 	return roles, nil

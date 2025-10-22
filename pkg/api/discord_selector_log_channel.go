@@ -257,7 +257,7 @@ func (d *Discord) handleLogChannelSelectionDone(s *discordgo.Session, i *discord
 			Message: fmt.Sprintf("Error fetching selected channels: %s", err),
 		})
 	}
-	var channelNames []string
+	var selectedChannels []*discordgo.Channel
 
 	// Get all channels for the guild to ensure we have the latest data
 	allChannels, err := s.GuildChannels(i.GuildID)
@@ -275,16 +275,25 @@ func (d *Discord) handleLogChannelSelectionDone(s *discordgo.Session, i *discord
 		// Build the list of selected channel names
 		for _, channelID := range selectedIDs {
 			if channel, exists := channelMap[channelID]; exists && channel.Type == discordgo.ChannelTypeGuildText {
-				channelNames = append(channelNames, fmt.Sprintf("- #%s", channel.Name))
+				selectedChannels = append(selectedChannels, channel)
 			}
 		}
 	}
 
 	description := "⚠️ Aucun salon sélectionné"
-	if len(channelNames) > 0 {
-		// Sort channel names for a consistent display
-		sort.Strings(channelNames)
-		description = fmt.Sprintf("✅ %d salons sélectionnés:\n%s", len(channelNames), strings.Join(channelNames, "\n"))
+	if len(selectedChannels) > 0 {
+		// Sort channel by position
+		sort.Slice(selectedChannels, func(i, j int) bool {
+			return selectedChannels[i].Position < selectedChannels[j].Position
+		})
+
+		// Build the description with selected channel names
+		var channelNames []string
+		for _, ch := range selectedChannels {
+			channelNames = append(channelNames, fmt.Sprintf("- <#%s>", ch.ID))
+		}
+
+		description = "✅ Salons de logs sélectionnés :\n" + strings.Join(channelNames, "\n")
 	}
 
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
@@ -292,7 +301,6 @@ func (d *Discord) handleLogChannelSelectionDone(s *discordgo.Session, i *discord
 			Title:       "Configuration terminée",
 			Description: description,
 			Color:       model.Green.Int(),
-			Footer:      model.DefaultFooter,
 			Timestamp:   time.Now().Format(time.RFC3339),
 		}},
 		Components: &[]discordgo.MessageComponent{},

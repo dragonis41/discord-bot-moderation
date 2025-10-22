@@ -255,7 +255,7 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 			Message: fmt.Sprintf("Error fetching selected roles: %s", err),
 		})
 	}
-	var roleNames []string
+	var selectedRoles []*discordgo.Role
 
 	// Get all roles for the guild to ensure we have the latest data
 	allRoles, err := s.GuildRoles(i.GuildID)
@@ -266,22 +266,31 @@ func (d *Discord) handleRoleSelectionDone(s *discordgo.Session, i *discordgo.Int
 	} else {
 		// Create a map for quick lookup
 		roleMap := make(map[string]*discordgo.Role)
-		for _, ch := range allRoles {
-			roleMap[ch.ID] = ch
+		for _, r := range allRoles {
+			roleMap[r.ID] = r
 		}
 
-		// Build the list of selected role names
+		// Build the list of selected roles
 		for _, roleID := range selectedIDs {
 			if role, exists := roleMap[roleID]; exists {
-				roleNames = append(roleNames, fmt.Sprintf("- @%s", role.Name))
+				selectedRoles = append(selectedRoles, role)
 			}
 		}
 	}
 
 	description := "⚠️ Aucun role sélectionné."
-	if len(roleNames) > 0 {
-		// Sort role names for consistent display
-		sort.Strings(roleNames)
+	if len(selectedRoles) > 0 {
+		// Sort roles by position (descending, higher positions first)
+		sort.Slice(selectedRoles, func(i, j int) bool {
+			return selectedRoles[i].Position > selectedRoles[j].Position
+		})
+
+		// Build the role names list
+		var roleNames []string
+		for _, role := range selectedRoles {
+			roleNames = append(roleNames, fmt.Sprintf("- @%s", role.Name))
+		}
+
 		description = fmt.Sprintf("✅ %d roles sélectionnés:\n%s", len(roleNames), strings.Join(roleNames, "\n"))
 	}
 
