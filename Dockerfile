@@ -10,14 +10,18 @@ WORKDIR /app
 # Copy go mod files
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod download
+# Download dependencies with caching
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy source code
 COPY . .
 
 # Build the application with CGO enabled for SQLite3
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o discord-bot-moderation cmd/app/main.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux go build -installsuffix cgo -ldflags="-w -s" -o discord-bot-moderation cmd/app/main.go
 
 # Final stage
 FROM alpine:latest
