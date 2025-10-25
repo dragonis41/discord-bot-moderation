@@ -40,7 +40,7 @@ func (d *Discord) RunDiscordBot() {
 	d.client.AddHandler(d.slashCommandHandler)       // Handler for slash commands
 	d.client.AddHandler(d.handleLogChannelSelection) // Handler for message component interaction for log channel selection
 	d.client.AddHandler(d.handleModChannelSelection) // Handler for message component interaction for moderation channel selection
-	d.client.AddHandler(d.handleRoleSelection)       // Handler for message component interaction for role selection
+	d.client.AddHandler(d.handleModRoleSelection)    // Handler for message component interaction for role selection
 
 	// open session
 	err := d.client.Open()

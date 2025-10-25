@@ -19,14 +19,20 @@ func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.Interacti
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
 	}); err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectLogChannels()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "selectLogChannels()",
+			Message:  fmt.Sprintf("Error deferring response: %s", err),
 		})
 		return
 	}
 
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectLogChannels()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	d.log.LogInfo(logger.LogModel{
+		Database: d.db,
+		GuildID:  i.GuildID,
+		Function: "selectLogChannels()",
+		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
 	if !d.db.CheckAdminPermission(s, i) {
@@ -34,14 +40,15 @@ func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	// Get text channels
-	textChannels, err := d.getTextChannels(s, i.GuildID)
+	items, err := d.getTextChannelsAsItems(s, i.GuildID)
 	if err != nil {
 		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
 		return
 	}
 
 	// Start with page 0
-	d.sendLogChannelSelectPage(s, i.Interaction, textChannels, 0)
+	config, dbOps := d.getLogChannelConfig()
+	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
 func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -50,14 +57,20 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
 	}); err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectModeratorChannels()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "selectModeratorChannels()",
+			Message:  fmt.Sprintf("Error deferring response: %s", err),
 		})
 		return
 	}
 
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectModeratorChannels()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	d.log.LogInfo(logger.LogModel{
+		Database: d.db,
+		GuildID:  i.GuildID,
+		Function: "selectModeratorChannels()",
+		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
 	if !d.db.CheckAdminPermission(s, i) {
@@ -65,14 +78,15 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 	}
 
 	// Get text channels
-	textChannels, err := d.getTextChannels(s, i.GuildID)
+	items, err := d.getTextChannelsAsItems(s, i.GuildID)
 	if err != nil {
 		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
 		return
 	}
 
 	// Start with page 0
-	d.sendModChannelSelectPage(s, i.Interaction, textChannels, 0)
+	config, dbOps := d.getModChannelConfig()
+	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
 func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -81,14 +95,20 @@ func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.Intera
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
 	}); err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectModeratorRoles()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "selectModeratorRoles()",
+			Message:  fmt.Sprintf("Error deferring response: %s", err),
 		})
 		return
 	}
 
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "selectModeratorRoles()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	d.log.LogInfo(logger.LogModel{
+		Database: d.db,
+		GuildID:  i.GuildID,
+		Function: "selectModeratorRoles()",
+		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
 	if !d.db.CheckAdminPermission(s, i) {
@@ -96,12 +116,13 @@ func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	// Get roles
-	roles, err := d.getRoles(s, i.GuildID)
+	items, err := d.getRolesAsItems(s, i.GuildID)
 	if err != nil {
 		d.sendErrorMessage(s, i.Interaction, "Sélection des roles", "Une erreur est survenue lors de la récupération des roles.")
 		return
 	}
 
 	// Start with page 0
-	d.sendRoleSelectPage(s, i.Interaction, roles, 0)
+	config, dbOps := d.getModRoleConfig()
+	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
