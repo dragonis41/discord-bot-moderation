@@ -41,6 +41,8 @@ func (d *Discord) RunDiscordBot() {
 	d.client.AddHandler(d.handleLogChannelSelection) // Handler for message component interaction for log channel selection
 	d.client.AddHandler(d.handleModChannelSelection) // Handler for message component interaction for moderation channel selection
 	d.client.AddHandler(d.handleModRoleSelection)    // Handler for message component interaction for role selection
+	d.client.AddHandler(d.messageCreateHandler)      // Handler for message creation events
+	d.client.AddHandler(d.messageUpdateHandler)      // Handler for message update events
 
 	// open session
 	err := d.client.Open()

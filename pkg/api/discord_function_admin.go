@@ -33,7 +33,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		Message: fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
-	if !d.db.CheckAdminPermission(s, i) {
+	if !d.db.CheckAdminPermissionOnInteraction(s, i) {
 		return
 	}
 

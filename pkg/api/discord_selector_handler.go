@@ -62,9 +62,7 @@ func (d *Discord) handleModChannelSelection(s *discordgo.Session, i *discordgo.I
 	formatDoneMessage := func(items []SelectionItem) string {
 		// Sort channels by position
 		sort.Slice(items, func(i, j int) bool {
-			chI := items[i].(ChannelItem)
-			chJ := items[j].(ChannelItem)
-			return chI.Position < chJ.Position
+			return items[i].(ChannelItem).Position < items[j].(ChannelItem).Position
 		})
 
 		var channelNames []string
@@ -94,11 +92,9 @@ func (d *Discord) getModRoleConfig() (SelectionConfig, DatabaseOperations) {
 
 func (d *Discord) handleModRoleSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	formatDoneMessage := func(items []SelectionItem) string {
-		// Sort roles by position (descending, higher positions first)
+		// Sort roles by position
 		sort.Slice(items, func(i, j int) bool {
-			roleI := items[i].(RoleItem)
-			roleJ := items[j].(RoleItem)
-			return roleI.Position > roleJ.Position
+			return items[i].(RoleItem).Position > items[j].(RoleItem).Position
 		})
 
 		var roleNames []string
