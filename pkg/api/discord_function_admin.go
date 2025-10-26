@@ -98,9 +98,9 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 
-	nbEntries, err := d.db.GetLogEntriesCount(i.GuildID)
+	nbEntries, err := d.db.GetSystemLogEntriesCount(i.GuildID)
 	if err == nil {
-		maxEntries, err := d.db.GetMaxLogEntries(i.GuildID)
+		maxEntries, err := d.db.GetMaxSystemLogEntries(i.GuildID)
 		if err == nil {
 			fields = append(fields, &discordgo.MessageEmbedField{
 				Name:   "Log entries",
@@ -110,7 +110,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	}
 
-	last5Errors, err := d.db.GetLogEntriesErrorsByGuildAndSystem(i.GuildID, 5)
+	last5Errors, err := d.db.GetSystemLogEntriesErrorsByGuildAndSystem(i.GuildID, 5)
 	if err == nil && len(last5Errors) > 0 {
 		errorMessages := ""
 		for _, entry := range last5Errors {

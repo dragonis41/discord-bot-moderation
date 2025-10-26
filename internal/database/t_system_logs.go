@@ -8,17 +8,17 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
-type LogsInterface interface {
-	AddLogEntry(guildID string, logType model.LogType, function string, content string) error
-	GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, error)
-	GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]LogEntry, error)
-	GetLogEntriesCount(guildID string) (int, error)
-	SetMaxLogEntries(guildID string, maxEntries int) error
-	GetMaxLogEntries(guildID string) (int, error)
+type SystemLogsInterface interface {
+	AddSystemLogEntry(guildID string, logType model.LogType, function string, content string) error
+	GetSystemLogEntriesByGuild(guildID string, limit int) ([]SystemLogEntry, error)
+	GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]SystemLogEntry, error)
+	GetSystemLogEntriesCount(guildID string) (int, error)
+	SetMaxSystemLogEntries(guildID string, maxEntries int) error
+	GetMaxSystemLogEntries(guildID string) (int, error)
 }
 
-// LogEntry represents a single log entry
-type LogEntry struct {
+// SystemLogEntry represents a single system log entry
+type SystemLogEntry struct {
 	ID        int
 	GuildID   string
 	LogType   string
@@ -27,9 +27,9 @@ type LogEntry struct {
 	CreatedAt string
 }
 
-func (d *Database) MigrateLogs() error {
+func (d *Database) MigrateSystemLogs() error {
 	createTableQuery := `
-	CREATE TABLE IF NOT EXISTS logs (
+	CREATE TABLE IF NOT EXISTS system_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		guild_id TEXT NOT NULL,
 		log_type TEXT NOT NULL,
@@ -41,18 +41,18 @@ func (d *Database) MigrateLogs() error {
 
 	_, err := d.db.Exec(createTableQuery)
 	if err != nil {
-		return fmt.Errorf("failed to create logs table: %w", err)
+		return fmt.Errorf("failed to create system_logs table: %w", err)
 	}
 
 	// Create index for better performance on guild_id queries
 	createIndexQuery := `
-	CREATE INDEX IF NOT EXISTS idx_logs_guild_id_created_at
-	ON logs(guild_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_system_logs_guild_id_created_at
+	ON system_logs(guild_id, created_at DESC);
 	`
 
 	_, err = d.db.Exec(createIndexQuery)
 	if err != nil {
-		return fmt.Errorf("failed to create logs index: %w", err)
+		return fmt.Errorf("failed to create system_logs index: %w", err)
 	}
 
 	// Create a table to store max log entries configuration per guild
@@ -71,9 +71,9 @@ func (d *Database) MigrateLogs() error {
 	return nil
 }
 
-func (d *Database) AddLogEntry(guildID string, logType model.LogType, function string, content string) error {
+func (d *Database) AddSystemLogEntry(guildID string, logType model.LogType, function string, content string) error {
 	// First, get the max entries limit for this guild
-	maxEntries, err := d.getMaxLogEntries(guildID)
+	maxEntries, err := d.getMaxSystemLogEntries(guildID)
 	if err != nil {
 		// If error or no config exists, use default of 10000
 		maxEntries = 10000
@@ -81,7 +81,7 @@ func (d *Database) AddLogEntry(guildID string, logType model.LogType, function s
 
 	// Insert the new log entry
 	insertQuery := `
-	INSERT INTO logs (guild_id, log_type, function, content)
+	INSERT INTO system_logs (guild_id, log_type, function, content)
 	VALUES (?, ?, ?, ?);
 	`
 
@@ -91,7 +91,7 @@ func (d *Database) AddLogEntry(guildID string, logType model.LogType, function s
 	}
 
 	// Clean up old entries if we exceed the limit
-	if err := d.cleanupOldLogEntries(guildID, maxEntries); err != nil {
+	if err := d.cleanupOldSystemLogEntries(guildID, maxEntries); err != nil {
 		// Log the error but don't fail the operation
 		return fmt.Errorf("log entry added but cleanup failed: %w", err)
 	}
@@ -99,15 +99,15 @@ func (d *Database) AddLogEntry(guildID string, logType model.LogType, function s
 	return nil
 }
 
-// cleanupOldLogEntries removes old log entries when the count exceeds maxEntries
-func (d *Database) cleanupOldLogEntries(guildID string, maxEntries int) error {
+// cleanupOldSystemLogEntries removes old log entries when the count exceeds maxEntries
+func (d *Database) cleanupOldSystemLogEntries(guildID string, maxEntries int) error {
 	// Delete entries that are beyond the maxEntries limit
 	// This query keeps the most recent maxEntries and deletes the rest
 	deleteQuery := `
-	DELETE FROM logs
+	DELETE FROM system_logs
 	WHERE guild_id = ?
 	AND id NOT IN (
-		SELECT id FROM logs
+		SELECT id FROM system_logs
 		WHERE guild_id = ?
 		ORDER BY created_at DESC, id DESC
 		LIMIT ?
@@ -116,14 +116,14 @@ func (d *Database) cleanupOldLogEntries(guildID string, maxEntries int) error {
 
 	_, err := d.db.Exec(deleteQuery, guildID, guildID, maxEntries)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup old log entries: %w", err)
+		return fmt.Errorf("failed to cleanup old guild log entries: %w", err)
 	}
 
 	return nil
 }
 
-// getMaxLogEntries retrieves the max entries configuration for a guild
-func (d *Database) getMaxLogEntries(guildID string) (int, error) {
+// getMaxSystemLogEntries retrieves the max entries configuration for a guild
+func (d *Database) getMaxSystemLogEntries(guildID string) (int, error) {
 	var maxEntries int
 	query := `
 	SELECT max_entries FROM logs_config
@@ -136,14 +136,14 @@ func (d *Database) getMaxLogEntries(guildID string) (int, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 10000, nil
 		}
-		return 0, fmt.Errorf("failed to get max log entries: %w", err)
+		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
 	}
 
 	return maxEntries, nil
 }
 
-// SetMaxLogEntries sets the maximum number of log entries for a guild
-func (d *Database) SetMaxLogEntries(guildID string, maxEntries int) error {
+// SetMaxSystemLogEntries sets the maximum number of log entries for a guild
+func (d *Database) SetMaxSystemLogEntries(guildID string, maxEntries int) error {
 	// Insert or update the configuration
 	query := `
 	INSERT INTO logs_config (guild_id, max_entries)
@@ -153,32 +153,32 @@ func (d *Database) SetMaxLogEntries(guildID string, maxEntries int) error {
 
 	_, err := d.db.Exec(query, guildID, maxEntries)
 	if err != nil {
-		return fmt.Errorf("failed to set max log entries: %w", err)
+		return fmt.Errorf("failed to set max guild log entries: %w", err)
 	}
 
-	// Immediately cleanup if the new limit is lower than current count
-	if err := d.cleanupOldLogEntries(guildID, maxEntries); err != nil {
-		return fmt.Errorf("failed to cleanup after setting new limit: %w", err)
+	// Immediately clean guild's logs if the new limit is lower than current count
+	if err := d.cleanupOldSystemLogEntries(guildID, maxEntries); err != nil {
+		return fmt.Errorf("failed to cleanup guild logs after setting new limit: %w", err)
 	}
 
 	// Also cleanup system logs
-	if err := d.cleanupOldLogEntries("", maxEntries); err != nil {
+	if err := d.cleanupOldSystemLogEntries("", maxEntries); err != nil {
 		return fmt.Errorf("failed to cleanup system logs after setting new limit: %w", err)
 	}
 
 	return nil
 }
 
-// GetMaxLogEntries retrieves the maximum number of log entries configured for a guild
-func (d *Database) GetMaxLogEntries(guildID string) (int, error) {
-	return d.getMaxLogEntries(guildID)
+// GetMaxSystemLogEntries retrieves the maximum number of log entries configured for a guild
+func (d *Database) GetMaxSystemLogEntries(guildID string) (int, error) {
+	return d.getMaxSystemLogEntries(guildID)
 }
 
-// GetLogEntriesByGuild retrieves log entries for a specific guild
-func (d *Database) GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, error) {
+// GetSystemLogEntriesByGuild retrieves log entries for a specific guild
+func (d *Database) GetSystemLogEntriesByGuild(guildID string, limit int) ([]SystemLogEntry, error) {
 	query := `
 	SELECT id, guild_id, log_type, function, content, created_at
-	FROM logs
+	FROM system_logs
 	WHERE guild_id = ?
 	ORDER BY created_at DESC, id DESC
 	LIMIT ?;
@@ -186,16 +186,16 @@ func (d *Database) GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, 
 
 	rows, err := d.db.Query(query, guildID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get log entries: %w", err)
+		return nil, fmt.Errorf("failed to get guild log entries: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []LogEntry
+	var entries []SystemLogEntry
 	for rows.Next() {
-		var entry LogEntry
+		var entry SystemLogEntry
 		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.LogType,
 			&entry.Function, &entry.Content, &entry.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan log entry: %w", err)
+			return nil, fmt.Errorf("failed to scan guild log entry: %w", err)
 		}
 		entries = append(entries, entry)
 	}
@@ -207,11 +207,11 @@ func (d *Database) GetLogEntriesByGuild(guildID string, limit int) ([]LogEntry, 
 	return entries, nil
 }
 
-// GetLogEntriesErrorsByGuildAndSystem retrieves log entries for a specific guild and system-wide error logs
-func (d *Database) GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]LogEntry, error) {
+// GetSystemLogEntriesErrorsByGuildAndSystem retrieves log entries for a specific guild and system-wide error logs
+func (d *Database) GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]SystemLogEntry, error) {
 	query := `
 		SELECT id, guild_id, log_type, function, content, created_at
-		FROM logs
+		FROM system_logs
 		WHERE (guild_id = ? OR guild_id = '') AND log_type = ?
 		ORDER BY created_at DESC, id DESC
 		LIMIT ?;
@@ -219,16 +219,16 @@ func (d *Database) GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int
 
 	rows, err := d.db.Query(query, guildID, model.ErrorType, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get log entries: %w", err)
+		return nil, fmt.Errorf("failed to get system log entries: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []LogEntry
+	var entries []SystemLogEntry
 	for rows.Next() {
-		var entry LogEntry
+		var entry SystemLogEntry
 		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.LogType,
 			&entry.Function, &entry.Content, &entry.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan log entry: %w", err)
+			return nil, fmt.Errorf("failed to scan system log entry: %w", err)
 		}
 		entries = append(entries, entry)
 	}
@@ -240,17 +240,17 @@ func (d *Database) GetLogEntriesErrorsByGuildAndSystem(guildID string, limit int
 	return entries, nil
 }
 
-// GetLogEntriesCount returns the total number of log entries for a guild
-func (d *Database) GetLogEntriesCount(guildID string) (int, error) {
+// GetSystemLogEntriesCount returns the total number of log entries for a guild
+func (d *Database) GetSystemLogEntriesCount(guildID string) (int, error) {
 	var count int
 	query := `
-	SELECT COUNT(*) FROM logs
+	SELECT COUNT(*) FROM system_logs
 	WHERE guild_id = ?;
 	`
 
 	err := d.db.QueryRow(query, guildID).Scan(&count)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get log entries count: %w", err)
+		return 0, fmt.Errorf("failed to get guild log entries count: %w", err)
 	}
 
 	return count, nil

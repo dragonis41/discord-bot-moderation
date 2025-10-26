@@ -72,20 +72,20 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 	// TODO : Log this report in the database
 
-	// TODO : Get this list from the database
-	adminRoleNames := []string{"sudoers"}
-
-	// Get the list of all roles in the guild
-	roles, err := s.GuildRoles(i.GuildID)
+	modRoles, err := d.db.GetModerationRolesByGuildId(i.GuildID)
 	if err != nil {
 		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
-			Message: fmt.Sprintf("Error fetching guild roles: %s", err),
+			Message: fmt.Sprintf("Error fetching moderation roles from database: %s", err),
+		})
+	} else if len(modRoles) == 0 {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: "No moderation roles configured for this guild",
 		})
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
 				{
 					Title:       "Report",
-					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
+					Description: "Aucun rôle de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
 					Timestamp:   time.Now().Format(time.RFC3339),
@@ -94,15 +94,9 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		return
 	}
-	roleMap := make(map[string]string) // name -> id
-	for _, role := range roles {
-		roleMap[role.Name] = role.ID
-	}
 	modRoleMentions := ""
-	for _, name := range adminRoleNames {
-		if id, exists := roleMap[name]; exists {
-			modRoleMentions = fmt.Sprintf("%s<@&%s> ", modRoleMentions, id)
-		}
+	for _, id := range modRoles {
+		modRoleMentions = fmt.Sprintf("%s<@&%s> ", modRoleMentions, id)
 	}
 
 	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)

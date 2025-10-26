@@ -37,7 +37,7 @@ func NewDatabase() (*Database, error) {
 }
 
 func (d *Database) Migrate() error {
-	if err := d.MigrateLogs(); err != nil {
+	if err := d.MigrateSystemLogs(); err != nil {
 		return err
 	}
 	if err := d.MigrateLogChannel(); err != nil {

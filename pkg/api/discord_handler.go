@@ -76,7 +76,7 @@ func (d *Discord) RunDiscordBot() {
 
 	// Set default max log entries for each connected guild
 	for _, guild := range d.client.State.Guilds {
-		err := d.db.SetMaxLogEntries(guild.ID, 10000)
+		err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
 		if err != nil {
 			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
 				Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
