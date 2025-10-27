@@ -34,8 +34,9 @@ func (d *Database) UserHasModerationRole(guildID string, member *discordgo.Membe
 	if err != nil {
 		return false
 	}
+	// If no moderation roles are set, allow all users
 	if len(modRoles) == 0 {
-		return false
+		return true
 	}
 
 	// Convert modRoles slice to map for O(1) lookup

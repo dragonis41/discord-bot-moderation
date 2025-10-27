@@ -60,11 +60,6 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		return
 	}
 
-	// Check if user has moderation permissions
-	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
-		return
-	}
-
 	// Defer the response
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -79,6 +74,11 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 			Function: "handleReportActions()",
 			Message:  fmt.Sprintf("Error deferring response: %s", err),
 		})
+		return
+	}
+
+	// Check if user has moderation permissions
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
 	}
 

@@ -40,10 +40,7 @@ func (d *Database) Migrate() error {
 	if err := d.MigrateSystemLogs(); err != nil {
 		return err
 	}
-	if err := d.MigrateLogChannel(); err != nil {
-		return err
-	}
-	if err := d.MigrateModerationChannel(); err != nil {
+	if err := d.MigrateGuildChannels(); err != nil {
 		return err
 	}
 	if err := d.MigrateModerationRole(); err != nil {
