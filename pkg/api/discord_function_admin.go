@@ -30,7 +30,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s] asking for bot status", i.ApplicationCommandData().Name, i.Member.User.Username),
+		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
 	if !d.db.CheckAdminPermissionOnInteraction(s, i) {

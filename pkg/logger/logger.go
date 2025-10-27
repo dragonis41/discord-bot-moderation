@@ -21,6 +21,9 @@ func NewLogger() *Logger {
 	return &Logger{}
 }
 
+// LogSuccess logs a success message to the console and database if provided.
+//
+//	m.Database can be nil, in which case the message is only logged to the console.
 func (l *Logger) LogSuccess(m LogModel) {
 	log.Printf("%s[%s] %s%s\n", model.Green.String(), model.SuccessType, m.Message, model.Reset.String())
 
@@ -32,6 +35,9 @@ func (l *Logger) LogSuccess(m LogModel) {
 	}
 }
 
+// LogInfo logs an info message to the console and database if provided.
+//
+//	m.Database can be nil, in which case the message is only logged to the console.
 func (l *Logger) LogInfo(m LogModel) {
 	log.Printf("%s[%s] %s%s\n", model.Blue.String(), model.InfoType, m.Message, model.Reset.String())
 
@@ -43,6 +49,9 @@ func (l *Logger) LogInfo(m LogModel) {
 	}
 }
 
+// LogWarning logs a warning message to the console and database if provided.
+//
+//	m.Database can be nil, in which case the message is only logged to the console.
 func (l *Logger) LogWarning(m LogModel) {
 	log.Printf("%s[%s] %s%s\n", model.Orange.String(), model.WarningType, m.Message, model.Reset.String())
 
@@ -54,6 +63,9 @@ func (l *Logger) LogWarning(m LogModel) {
 	}
 }
 
+// LogError logs an error message to the console and database if provided.
+//
+//	m.Database can be nil, in which case the message is only logged to the console.
 func (l *Logger) LogError(m LogModel) {
 	log.Printf("%s[%s] %s%s\n", model.Red.String(), model.ErrorType, m.Message, model.Reset.String())
 
@@ -65,6 +77,7 @@ func (l *Logger) LogError(m LogModel) {
 	}
 }
 
+// LogFatal logs a fatal error message to the console and exits the application.
 func (l *Logger) LogFatal(message string) {
 	log.Fatalf("%s[%s] %s%s\n", model.Red.String(), model.ErrorType, message, model.Reset.String())
 }

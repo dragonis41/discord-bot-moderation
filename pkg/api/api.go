@@ -20,6 +20,6 @@ func NewClient(log *logger.Logger, db *database.Database, discordClient *discord
 		log:    log,
 		db:     db,
 		client: discordClient,
-		cache:  NewCache(100, 3, 10*time.Minute),
+		cache:  NewCache(100, 3, 5*time.Minute),
 	}
 }

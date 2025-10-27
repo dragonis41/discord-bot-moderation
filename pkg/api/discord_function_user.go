@@ -136,19 +136,61 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		return
 	}
+
+	// Get recent messages from the reported user
+	recentMessages := d.cache.GetUserRecentMessages(i.GuildID, reportedUser.ID, 10)
+	messagesText := ""
+	const maxRecentMessagesLength = 800
+
+	for idx, msg := range recentMessages {
+		content := msg.Content
+		if len(content) > 100 {
+			content = content[:97] + "..."
+		}
+
+		line := fmt.Sprintf("%d. `%s` in <#%s>\n", idx+1, content, msg.ChannelID)
+
+		if len(messagesText)+len(line) > maxRecentMessagesLength {
+			messagesText += fmt.Sprintf("... et %d message(s) de plus", len(recentMessages)-idx)
+			break
+		}
+
+		messagesText += line
+	}
+
+	if messagesText == "" {
+		messagesText = "*Aucun message récent disponible*"
+	}
+
+	description := fmt.Sprintf(
+		"**Utilisateur signalé**: <@!%s> (ID : %s)\n"+
+			"**Salon**: <#%s>\n"+
+			"**Raison**: %s\n\n"+
+			"**Messages récents**:\n%s",
+		reportedUser.ID,
+		reportedUser.ID,
+		i.ChannelID,
+		reason,
+		messagesText,
+	)
+
+	// Truncate description if it exceeds Discord's limit
+	const maxDescriptionLength = 4096
+	if len(description) > maxDescriptionLength {
+		description = description[:maxDescriptionLength-3] + "..."
+	}
+
 	for _, channelID := range selectedChannels {
 		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-			Content: modRoleMentions,
+			Content:    modRoleMentions,
+			Components: buildReportActionButtons(reportedUser.ID),
 			Embed: &discordgo.MessageEmbed{
-				Title: fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
-				Description: fmt.Sprintf("**Utilisateur signalé**: <@!%s> (ID : %s)\n**Salon**: <#%s>\n**Raison**: %s",
-					reportedUser.ID,
-					reportedUser.ID,
-					i.ChannelID,
-					reason,
-				),
-				Color:     model.Red.Int(),
-				Timestamp: time.Now().Format(time.RFC3339),
+				Title:       fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
+				Description: description,
+				Color:       model.Red.Int(),
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: "Aucune action n'a encore été prise.",
+				},
 			},
 		})
 		if err != nil {

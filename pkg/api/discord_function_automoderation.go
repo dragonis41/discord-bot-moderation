@@ -21,7 +21,7 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 	// Ignore messages from moderators
-	if d.db.UserHasModerationRoleOnMessageCreate(s, m) {
+	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
 		return
 	}
 	// TODO : Check if the message is sent in an excluded channel
@@ -43,7 +43,7 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 	// Ignore messages from moderators
-	if d.db.UserHasModerationRoleOnMessageUpdate(s, m) {
+	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
 		return
 	}
 	// TODO : Check if the message is sent in an excluded channel
@@ -58,6 +58,7 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 // Common function that handles moderation logic
 func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
 	d.checkBannedWords(s, m)
+	d.checkMessageSpam(s, m)
 	// TODO : Add more moderation functions
 }
 
@@ -182,10 +183,133 @@ func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message,
 	}
 }
 
+// checkMessageSpam detects if a user is sending the exact same message repeatedly (in a channel or across multiples channels)
+func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
+	// Get recent messages from this user
+	recentMessages := d.cache.GetUserRecentMessages(m.GuildID, m.Author.ID, d.cache.GetMaxCacheSize())
+
+	if len(recentMessages) < d.cache.GetViolationThreshold() {
+		return
+	}
+
+	// Count how many times this exact message appears within the violation window
+	duplicateCount := 0
+	now := time.Now()
+
+	for _, msg := range recentMessages {
+		// Check if message is within the violation window
+		if now.Sub(msg.Timestamp) <= d.cache.GetViolationWindow() {
+			// Exact match comparison
+			if msg.Content == m.Content {
+				duplicateCount++
+			}
+		}
+	}
+
+	// If threshold is reached, ban the user
+	if duplicateCount >= d.cache.GetViolationThreshold() {
+		// Permanent ban with message deletion
+		err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, "Spam (message répété 3 fois en 10m0s)", 1)
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  m.GuildID,
+				Function: "checkMessageSpam()",
+				Message:  fmt.Sprintf("Failed to ban user %s: %s", m.Author.ID, err),
+			})
+			return
+		}
+
+		// Log the action to moderation channels
+		d.logSpamBan(s, m, duplicateCount)
+
+		d.log.LogSuccess(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "checkMessageSpam()",
+			Message:  fmt.Sprintf("Banned user %s for spam (%d duplicate messages)", m.Author.Username, duplicateCount),
+		})
+	}
+}
+
+// logSpamBan sends an alert to moderators about the spam ban
+// TODO : This function is temporary and will be replaced by a proper logging system
+func (d *Discord) logSpamBan(s *discordgo.Session, m *discordgo.Message, duplicateCount int) {
+	logChannels, err := d.db.GetLogChannelsByGuildId(m.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "logSpamBan()",
+			Message:  fmt.Sprintf("Failed to fetch log channels: %s", err),
+		})
+		return
+	}
+
+	if len(logChannels) == 0 {
+		return
+	}
+
+	// Get moderator roles to ping
+	modRoles, err := d.db.GetModerationRolesByGuildId(m.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "logSpamBan()",
+			Message:  fmt.Sprintf("Failed to fetch moderation roles: %s", err),
+		})
+	}
+
+	modRoleMentions := ""
+	for _, roleID := range modRoles {
+		modRoleMentions += fmt.Sprintf("<@&%s> ", roleID)
+	}
+
+	// Truncate message content if too long for embed
+	messageContent := m.Content
+	if len(messageContent) > 500 {
+		messageContent = messageContent[:497] + "..."
+	}
+
+	description := fmt.Sprintf(
+		"**Utilisateur**: <@%s> (ID: %s)\n"+
+			"**Action**: Ban automatique\n"+
+			"**Raison**: Spam (message répété %d fois en %s)\n"+
+			"**Message répété**:\n```\n%s\n```",
+		m.Author.ID,
+		m.Author.ID,
+		duplicateCount,
+		d.cache.GetViolationWindow(),
+		messageContent,
+	)
+
+	// Send alert to all moderation channels
+	for _, channelID := range logChannels {
+		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+			Content: modRoleMentions,
+			Embed: &discordgo.MessageEmbed{
+				Title:       "🚨 Spam détecté",
+				Description: description,
+				Color:       model.Red.Int(),
+				Timestamp:   time.Now().Format(time.RFC3339),
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  m.GuildID,
+				Function: "logSpamBan()",
+				Message:  fmt.Sprintf("Failed to send alert to channel %s: %s", channelID, err),
+			})
+		}
+	}
+}
+
 // logAutomoderationAction sends an alert to moderators about repeated violations
 // TODO : This function is temporary and will be replaced by a proper logging system
 func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, bannedWord string, triggeredRule string) {
-	modChannels, err := d.db.GetLogChannelsByGuildId(m.GuildID)
+	logChannels, err := d.db.GetLogChannelsByGuildId(m.GuildID)
 	if err != nil {
 		d.log.LogError(logger.LogModel{
 			Database: d.db,
@@ -195,7 +319,7 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 		})
 		return
 	}
-	if len(modChannels) == 0 {
+	if len(logChannels) == 0 {
 		d.log.LogWarning(logger.LogModel{
 			Database: d.db,
 			GuildID:  m.GuildID,
@@ -272,7 +396,7 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 	}
 
 	// Send alert to all moderation channels
-	for _, channelID := range modChannels {
+	for _, channelID := range logChannels {
 		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 			Content: modRoleMentions,
 			Embed: &discordgo.MessageEmbed{
