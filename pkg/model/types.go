@@ -40,3 +40,7 @@ var (
 	DefaultFooter       = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
 	SelectionMenuFooter = &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"}
 )
+
+type AutoModerationType string
+
+const ()

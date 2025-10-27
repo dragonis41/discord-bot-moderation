@@ -35,7 +35,7 @@ func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.Interacti
 		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
-	if !d.db.CheckAdminPermissionOnInteraction(s, i) {
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
 	}
 
@@ -73,7 +73,7 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
-	if !d.db.CheckAdminPermissionOnInteraction(s, i) {
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
 	}
 
@@ -111,7 +111,7 @@ func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.Intera
 		Message:  fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
-	if !d.db.CheckAdminPermissionOnInteraction(s, i) {
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
 	}
 

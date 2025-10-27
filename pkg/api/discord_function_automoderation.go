@@ -209,7 +209,7 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
 	// If threshold is reached, ban the user
 	if duplicateCount >= d.cache.GetViolationThreshold() {
 		// Permanent ban with message deletion
-		err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, "Spam (message répété 3 fois en 10m0s)", 1)
+		err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()), 1)
 		if err != nil {
 			d.log.LogError(logger.LogModel{
 				Database: d.db,

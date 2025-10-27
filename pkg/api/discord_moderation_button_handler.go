@@ -61,29 +61,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	// Check if user has moderation permissions
-	if !d.db.UserHasModerationRole(i.GuildID, i.Member) {
-		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Flags: discordgo.MessageFlagsEphemeral,
-				Embeds: []*discordgo.MessageEmbed{
-					{
-						Title:       "Permission refusée",
-						Description: "Vous n'avez pas la permission d'effectuer cette action.",
-						Color:       model.Red.Int(),
-						Timestamp:   time.Now().Format(time.RFC3339),
-					},
-				},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  i.GuildID,
-				Function: "handleReportActions()",
-				Message:  fmt.Sprintf("Error responding to interaction: %s", err),
-			})
-		}
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
 	}
 
