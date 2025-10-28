@@ -1,0 +1,7 @@
+{
+  "language.changed": "✅ Language preference has been successfully changed to **{{.language}}**!",
+  "language.error": "❌ Failed to change language preference: {{.error}}",
+  "language.current": "📢 Current language for this server: **{{.language}}**",
+  "language.permission_denied": "❌ You don't have permission to use this command. Only moderators can change language settings.",
+  "language.invalid": "❌ Invalid language code. Available languages: `en_US` (English), `fr_FR` (French)"
+}

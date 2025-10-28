@@ -6,7 +6,9 @@ require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/nicksnyder/go-i18n/v2 v2.6.0
 	github.com/shirou/gopsutil/v3 v3.24.5
+	golang.org/x/text v0.30.0
 )
 
 require (

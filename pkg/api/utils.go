@@ -11,6 +11,7 @@ import (
 
 type DiscordUtilsInterface interface {
 	displayConnectedGuilds()
+	setMaxLogRetention()
 	checkForGuildSetup()
 	sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string)
 	splitMessage(message string, limit int) []string
@@ -32,7 +33,7 @@ func (d *Discord) displayConnectedGuilds() {
 	fmt.Printf("===============================================\n\n")
 }
 
-func (d *Discord) SetMaxLogRetention() {
+func (d *Discord) setMaxLogRetention() {
 	// Set default max log entries for each connected guild
 	for _, guild := range d.client.State.Guilds {
 		// Set default max system log entries

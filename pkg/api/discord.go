@@ -6,27 +6,30 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/localization"
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
 type Discord struct {
-	log    *logger.Logger
-	db     *database.Database
-	client *discordgo.Session
-	cache  *Cache
+	log       *logger.Logger
+	db        *database.Database
+	client    *discordgo.Session
+	localizer *localization.LocalizerWithCache
+	cache     *Cache
 }
 
-func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session) *Discord {
+func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session, locale *i18n.Bundle, cache *Cache) *Discord {
 	return &Discord{
-		log:    log,
-		db:     db,
-		client: discordClient,
-		cache:  NewCache(100, 3, 5*time.Minute),
+		log:       log,
+		db:        db,
+		client:    discordClient,
+		localizer: localization.NewLocalizerWithCache(locale, db, cache),
+		cache:     cache,
 	}
 }
 
@@ -79,7 +82,7 @@ func (d *Discord) RunDiscordBot() {
 	}
 
 	// Set max log retention for system and moderation logs
-	d.SetMaxLogRetention()
+	d.setMaxLogRetention()
 
 	// Initialize uptime tracking
 	utils.NewUptime()
@@ -121,6 +124,40 @@ func (d *Discord) registerSlashCommands() {
 		{
 			Name:        "status",
 			Description: "Affiche le statut du bot",
+		},
+		{
+			Name:        "language",
+			Description: "Manage language settings for this server",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "set",
+					Description: "Set the language for this server",
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "code",
+							Description: "Language code (en_US or fr_FR)",
+							Required:    true,
+							Choices: []*discordgo.ApplicationCommandOptionChoice{
+								{
+									Name:  "English (en_US)",
+									Value: "en_US",
+								},
+								{
+									Name:  "Français (fr_FR)",
+									Value: "fr_FR",
+								},
+							},
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "show",
+					Description: "Show the current language for this server",
+				},
+			},
 		},
 		{
 			Name:        "get-bot-logs",
@@ -264,6 +301,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.removeBannedWebsite(s, i)
 	case "configure-automod":
 		d.configureAutomod(s, i)
+	case "language":
+		d.handleLanguageCommand(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}

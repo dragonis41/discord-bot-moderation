@@ -47,6 +47,13 @@ type Cache struct {
 	// userViolationsMu protects concurrent access to userViolations
 	userViolationsMu sync.RWMutex
 
+	// guildLanguageCache stores the language preference for each guild
+	// Key: guildID, Value: language code (e.g., "en_US", "fr_FR")
+	guildLanguageCache map[string]string
+
+	// guildLanguageCacheMu protects concurrent access to guildLanguageCache
+	guildLanguageCacheMu sync.RWMutex
+
 	// maxCacheSize defines the maximum number of messages to store per guild
 	maxCacheSize int
 
@@ -63,6 +70,7 @@ func NewCache(maxCacheSize, violationThreshold int, violationWindow time.Duratio
 		messageCache:       make(map[string][]MessageCache),
 		messageCacheIndex:  make(map[string]map[string]int),
 		userViolations:     make(map[string]*UserViolation),
+		guildLanguageCache: make(map[string]string),
 		maxCacheSize:       maxCacheSize,
 		violationThreshold: violationThreshold,
 		violationWindow:    violationWindow,
@@ -243,4 +251,30 @@ func (c *Cache) GetViolationCount(guildID, userID string) int {
 	}
 
 	return violation.ViolationCount
+}
+
+// SetGuildLanguageCache stores the language preference in cache
+func (c *Cache) SetGuildLanguageCache(guildID, language string) {
+	c.guildLanguageCacheMu.Lock()
+	defer c.guildLanguageCacheMu.Unlock()
+
+	c.guildLanguageCache[guildID] = language
+}
+
+// GetGuildLanguageCache retrieves the cached language preference for a guild
+// Returns the language code and a boolean indicating if it was found in cache
+func (c *Cache) GetGuildLanguageCache(guildID string) (string, bool) {
+	c.guildLanguageCacheMu.RLock()
+	defer c.guildLanguageCacheMu.RUnlock()
+
+	language, exists := c.guildLanguageCache[guildID]
+	return language, exists
+}
+
+// InvalidateGuildLanguageCache removes a guild's language from cache
+func (c *Cache) InvalidateGuildLanguageCache(guildID string) {
+	c.guildLanguageCacheMu.Lock()
+	defer c.guildLanguageCacheMu.Unlock()
+
+	delete(c.guildLanguageCache, guildID)
 }

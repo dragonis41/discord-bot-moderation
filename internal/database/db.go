@@ -37,16 +37,25 @@ func NewDatabase() (*Database, error) {
 }
 
 func (d *Database) Migrate() error {
-	if err := d.MigrateSystemLogs(); err != nil {
+	if err := d.MigrateAutomoderation(); err != nil {
 		return err
 	}
 	if err := d.MigrateGuildChannels(); err != nil {
 		return err
 	}
+	if err := d.MigrateLogsConfigs(); err != nil {
+		return err
+	}
 	if err := d.MigrateModerationRole(); err != nil {
 		return err
 	}
-	if err := d.MigrateAutomoderation(); err != nil {
+	if err := d.MigrateModerationLogs(); err != nil {
+		return err
+	}
+	if err := d.MigrateSystemLogs(); err != nil {
+		return err
+	}
+	if err := d.MigrateGuildLanguage(); err != nil {
 		return err
 	}
 

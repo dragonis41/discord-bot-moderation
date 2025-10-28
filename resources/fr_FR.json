@@ -1,0 +1,7 @@
+{
+  "language.changed": "✅ La préférence de langue a été changée avec succès vers **{{.language}}** !",
+  "language.error": "❌ Échec du changement de langue : {{.error}}",
+  "language.current": "📢 Langue actuelle pour ce serveur : **{{.language}}**",
+  "language.permission_denied": "❌ Vous n'avez pas la permission d'utiliser cette commande. Seuls les modérateurs peuvent changer les paramètres de langue.",
+  "language.invalid": "❌ Code de langue invalide. Langues disponibles : `en_US` (Anglais), `fr_FR` (Français)"
+}
