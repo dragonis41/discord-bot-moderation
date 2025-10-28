@@ -9,12 +9,14 @@ import (
 
 // MessageCache stores recent messages for spam detection
 type MessageCache struct {
-	GuildID   string
-	ChannelID string
-	MessageID string
-	Content   string
-	AuthorID  string
-	Timestamp time.Time
+	GuildID         string
+	ChannelID       string
+	MessageID       string
+	Content         string
+	AuthorID        string
+	Timestamp       time.Time
+	AttachmentCount int
+	HasEmbeds       bool
 }
 
 // UserViolation tracks banned word violations per user per guild
@@ -97,12 +99,14 @@ func (c *Cache) AddMessage(m *discordgo.MessageCreate) {
 	// Add new message
 	newIndex := len(cache)
 	cache = append(cache, MessageCache{
-		GuildID:   m.GuildID,
-		ChannelID: m.ChannelID,
-		MessageID: m.ID,
-		Content:   m.Content,
-		AuthorID:  m.Author.ID,
-		Timestamp: time.Now(),
+		GuildID:         m.GuildID,
+		ChannelID:       m.ChannelID,
+		MessageID:       m.ID,
+		Content:         m.Content,
+		AuthorID:        m.Author.ID,
+		Timestamp:       time.Now(),
+		AttachmentCount: len(m.Attachments),
+		HasEmbeds:       len(m.Embeds) > 0,
 	})
 
 	// Update index
@@ -146,6 +150,13 @@ func (c *Cache) UpdateMessage(m *discordgo.MessageUpdate) {
 		// Update content and timestamp
 		cache[index].Content = m.Content
 		cache[index].Timestamp = time.Now()
+		// Update attachment info if available in the update event
+		if m.Attachments != nil {
+			cache[index].AttachmentCount = len(m.Attachments)
+		}
+		if m.Embeds != nil {
+			cache[index].HasEmbeds = len(m.Embeds) > 0
+		}
 		c.messageCache[m.GuildID] = cache
 	}
 }

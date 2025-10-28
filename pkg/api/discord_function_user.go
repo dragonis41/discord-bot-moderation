@@ -144,8 +144,35 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	for idx, msg := range recentMessages {
 		content := msg.Content
-		if len(content) > 100 {
-			content = content[:97] + "..."
+
+		// Handle messages with attachments but no text
+		if content == "" {
+			if msg.AttachmentCount > 0 && msg.HasEmbeds {
+				content = fmt.Sprintf("<fichier(s): %d + embed(s)>", msg.AttachmentCount)
+			} else if msg.AttachmentCount > 0 {
+				if msg.AttachmentCount == 1 {
+					content = "<fichier>"
+				} else {
+					content = fmt.Sprintf("<%d fichiers>", msg.AttachmentCount)
+				}
+			} else if msg.HasEmbeds {
+				content = "<embed>"
+			} else {
+				content = "<message vide>"
+			}
+		} else {
+			// Truncate long messages
+			if len(content) > 50 {
+				content = content[:47] + "..."
+			}
+			// Add attachment indicator if message has both text and attachments
+			if msg.AttachmentCount > 0 {
+				if msg.AttachmentCount == 1 {
+					content += " [+fichier]"
+				} else {
+					content += fmt.Sprintf(" [+%d fichiers]", msg.AttachmentCount)
+				}
+			}
 		}
 
 		line := fmt.Sprintf("%d. `%s` in <#%s>\n", idx+1, content, msg.ChannelID)
