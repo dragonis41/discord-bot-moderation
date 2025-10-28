@@ -2,16 +2,28 @@ package model
 
 import "github.com/bwmarrin/discordgo"
 
-type LogType string
+type SystemLogType string
 
 const (
-	SuccessType LogType = "SUCCESS"
-	InfoType    LogType = "INFO"
-	WarningType LogType = "WARNING"
-	ErrorType   LogType = "ERROR"
+	TypeSuccess SystemLogType = "SUCCESS"
+	TypeInfo    SystemLogType = "INFO"
+	TypeWarning SystemLogType = "WARNING"
+	TypeError   SystemLogType = "ERROR"
 )
 
-func (l LogType) String() string {
+func (l SystemLogType) String() string {
+	return string(l)
+}
+
+type ModerationLogAction string
+
+const (
+	ActionWarn ModerationLogAction = "WARN"
+	ActionKick ModerationLogAction = "KICK"
+	ActionBan  ModerationLogAction = "BAN"
+)
+
+func (l ModerationLogAction) String() string {
 	return string(l)
 }
 
@@ -40,7 +52,3 @@ var (
 	DefaultFooter       = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
 	SelectionMenuFooter = &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"}
 )
-
-type AutoModerationType string
-
-const ()

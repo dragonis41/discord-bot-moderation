@@ -12,6 +12,8 @@ import (
 
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
+	getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
+	getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -138,6 +140,176 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 	if err != nil {
 		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
+	}
+}
+
+func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
+		return
+	}
+
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	})
+
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+		return
+	}
+
+	nbEntries, err := d.db.GetSystemLogEntriesCount(i.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+			Message: fmt.Sprintf("Error getting system log entries count: %s", err),
+		})
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	maxEntries, err := d.db.GetMaxSystemLogEntries(i.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+			Message: fmt.Sprintf("Error getting max system log entries: %s", err),
+		})
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	var fields []*discordgo.MessageEmbedField
+	last10Errors, err := d.db.GetSystemLogEntriesByGuild(i.GuildID, 10)
+	if err == nil && len(last10Errors) > 0 {
+		errorMessages := ""
+		for _, entry := range last10Errors {
+			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "10 derniers logs",
+			Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
+			Inline: false,
+		})
+	}
+
+	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{
+			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
+	}
+}
+
+func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
+		return
+	}
+
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	})
+
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+		return
+	}
+
+	nbEntries, err := d.db.GetModerationLogEntriesCount(i.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+			Message: fmt.Sprintf("Error getting mod log entries count: %s", err),
+		})
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	maxEntries, err := d.db.GetMaxModerationLogEntries(i.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+			Message: fmt.Sprintf("Error getting max system log entries: %s", err),
+		})
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	var fields []*discordgo.MessageEmbedField
+	last10Errors, err := d.db.GetModerationLogEntriesByGuild(i.GuildID, 10)
+	if err == nil && len(last10Errors) > 0 {
+		errorMessages := ""
+		for _, entry := range last10Errors {
+			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Action, entry.Reason)
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "10 derniers logs",
+			Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
+			Inline: false,
+		})
+	}
+
+	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{
+			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
 			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
 		})
 	}

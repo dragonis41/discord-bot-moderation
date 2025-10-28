@@ -49,7 +49,7 @@ func (d *Discord) checkForGuildSetup() {
 			continue
 		}
 		if len(modRoles) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No moderation roles configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No moderation roles configured for guild [%s]", guild.Name)})
 		}
 
 		logChannels, err := d.db.GetLogChannelsByGuildId(guild.ID)
@@ -58,7 +58,7 @@ func (d *Discord) checkForGuildSetup() {
 			continue
 		}
 		if len(logChannels) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No log channels configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No log channels configured for guild [%s]", guild.Name)})
 		}
 
 		modChannels, err := d.db.GetModerationChannelsByGuildId(guild.ID)
@@ -67,7 +67,7 @@ func (d *Discord) checkForGuildSetup() {
 			continue
 		}
 		if len(modChannels) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No moderation channels configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No moderation channels configured for guild [%s]", guild.Name)})
 		}
 	}
 }

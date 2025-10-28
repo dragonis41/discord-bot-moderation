@@ -112,6 +112,14 @@ func (d *Discord) registerSlashCommands() {
 			Description: "Affiche le statut du bot",
 		},
 		{
+			Name:        "get-bot-logs",
+			Description: "Affiche les derniers logs du bot",
+		},
+		{
+			Name:        "get-moderation-logs",
+			Description: "Affiche les derniers logs de modération",
+		},
+		{
 			Name:        "set-log-channels",
 			Description: "Sélectionne les canaux où les rapports de modération seront envoyés",
 		},
@@ -142,7 +150,7 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
-			Name:        "list-banned-words",
+			Name:        "get-banned-words",
 			Description: "Affiche la liste des mots interdits",
 		},
 		{
@@ -170,7 +178,7 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
-			Name:        "list-banned-websites",
+			Name:        "get-banned-websites",
 			Description: "Affiche la liste des sites web interdits",
 		},
 		{
@@ -221,6 +229,10 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.reportUser(s, i)
 	case "status":
 		d.showStatus(s, i)
+	case "get-bot-logs":
+		d.getBotLogs(s, i)
+	case "get-moderation-logs":
+		d.getModerationLogs(s, i)
 	case "set-log-channels":
 		d.selectLogChannels(s, i)
 	case "set-moderation-channels":
@@ -229,13 +241,13 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.selectModeratorRoles(s, i)
 	case "add-banned-word":
 		d.addBannedWord(s, i)
-	case "list-banned-words":
+	case "get-banned-words":
 		d.listBannedWords(s, i)
 	case "remove-banned-word":
 		d.removeBannedWord(s, i)
 	case "add-banned-website":
 		d.addBannedWebsite(s, i)
-	case "list-banned-websites":
+	case "get-banned-websites":
 		d.listBannedWebsites(s, i)
 	case "remove-banned-website":
 		d.removeBannedWebsite(s, i)

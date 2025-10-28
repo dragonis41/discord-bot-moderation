@@ -9,7 +9,7 @@ import (
 )
 
 type SystemLogsInterface interface {
-	AddSystemLogEntry(guildID string, logType model.LogType, function string, content string) error
+	AddSystemLogEntry(guildID string, logType model.SystemLogType, function string, content string) error
 	GetSystemLogEntriesByGuild(guildID string, limit int) ([]SystemLogEntry, error)
 	GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]SystemLogEntry, error)
 	GetSystemLogEntriesCount(guildID string) (int, error)
@@ -71,7 +71,7 @@ func (d *Database) MigrateSystemLogs() error {
 	return nil
 }
 
-func (d *Database) AddSystemLogEntry(guildID string, logType model.LogType, function string, content string) error {
+func (d *Database) AddSystemLogEntry(guildID string, logType model.SystemLogType, function string, content string) error {
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.getMaxSystemLogEntries(guildID)
 	if err != nil {
@@ -217,7 +217,7 @@ func (d *Database) GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, lim
 		LIMIT ?;
 		`
 
-	rows, err := d.db.Query(query, guildID, model.ErrorType, limit)
+	rows, err := d.db.Query(query, guildID, model.TypeError, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system log entries: %w", err)
 	}
