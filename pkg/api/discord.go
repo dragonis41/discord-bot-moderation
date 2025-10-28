@@ -50,7 +50,7 @@ func (d *Discord) RunDiscordBot() {
 	// open session
 	err := d.client.Open()
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, Function: "selectLogChannels()",
+		d.log.LogError(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
 			Message: fmt.Sprintf("Error opening Discord session: %s", err),
 		})
 		return

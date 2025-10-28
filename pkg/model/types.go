@@ -18,9 +18,10 @@ func (l SystemLogType) String() string {
 type ModerationLogAction string
 
 const (
-	ActionWarn ModerationLogAction = "WARN"
-	ActionKick ModerationLogAction = "KICK"
-	ActionBan  ModerationLogAction = "BAN"
+	ActionReport ModerationLogAction = "REPORT"
+	ActionWarn   ModerationLogAction = "WARN"
+	ActionKick   ModerationLogAction = "KICK"
+	ActionBan    ModerationLogAction = "BAN"
 )
 
 func (l ModerationLogAction) String() string {
@@ -57,6 +58,7 @@ var (
 	Green  = Color{ansi: "\033[32m", hex: 0x00dd00}
 	Orange = Color{ansi: "\033[33m", hex: 0xff8800}
 	Blue   = Color{ansi: "\033[34m", hex: 0x0099ff}
+	Violet = Color{ansi: "\033[35m", hex: 0x9900ff}
 	Reset  = Color{ansi: "\033[0m", hex: 0xffffff}
 )
 

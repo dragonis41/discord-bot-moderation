@@ -12,6 +12,7 @@ type SystemLogsInterface interface {
 	GetSystemLogEntriesByGuild(guildID string, limit int) ([]SystemLogEntry, error)
 	GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]SystemLogEntry, error)
 	GetMaxSystemLogEntries(guildID string) (int, error)
+	GetSystemLogEntriesCount(guildID string) (int, error)
 }
 
 // SystemLogEntry represents a single system log entry

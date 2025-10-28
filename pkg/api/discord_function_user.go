@@ -69,7 +69,14 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 			reason,
 		),
 	})
-	// TODO : Log this report in the database
+
+	// Log the report in the database
+	err = d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.ID, reason))
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
+			Message: fmt.Sprintf("Error logging report to database: %s", err),
+		})
+	}
 
 	modRoles, err := d.db.GetModerationRolesByGuildId(i.GuildID)
 	if err != nil {
@@ -137,56 +144,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	// Get recent messages from the reported user
-	recentMessages := d.cache.GetUserRecentMessages(i.GuildID, reportedUser.ID, 10)
-	messagesText := ""
-	const maxRecentMessagesLength = 800
-
-	for idx, msg := range recentMessages {
-		content := msg.Content
-
-		// Handle messages with attachments but no text
-		if content == "" {
-			if msg.AttachmentCount > 0 && msg.HasEmbeds {
-				content = fmt.Sprintf("<fichier(s): %d + embed(s)>", msg.AttachmentCount)
-			} else if msg.AttachmentCount > 0 {
-				if msg.AttachmentCount == 1 {
-					content = "<fichier>"
-				} else {
-					content = fmt.Sprintf("<%d fichiers>", msg.AttachmentCount)
-				}
-			} else if msg.HasEmbeds {
-				content = "<embed>"
-			} else {
-				content = "<message vide>"
-			}
-		} else {
-			// Truncate long messages
-			if len(content) > 50 {
-				content = content[:47] + "..."
-			}
-			// Add attachment indicator if message has both text and attachments
-			if msg.AttachmentCount > 0 {
-				if msg.AttachmentCount == 1 {
-					content += " [+fichier]"
-				} else {
-					content += fmt.Sprintf(" [+%d fichiers]", msg.AttachmentCount)
-				}
-			}
-		}
-
-		line := fmt.Sprintf("%d. `%s` in <#%s>\n", idx+1, content, msg.ChannelID)
-
-		if len(messagesText)+len(line) > maxRecentMessagesLength {
-			messagesText += fmt.Sprintf("... et %d message(s) de plus", len(recentMessages)-idx)
-			break
-		}
-
-		messagesText += line
-	}
-
-	if messagesText == "" {
-		messagesText = "*Aucun message récent disponible*"
-	}
+	messages := d.getUserRecentMessagesString(i.GuildID, reportedUser, 10)
 
 	description := fmt.Sprintf(
 		"**Utilisateur signalé**: <@!%s> (ID : %s)\n"+
@@ -197,7 +155,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		reportedUser.ID,
 		i.ChannelID,
 		reason,
-		messagesText,
+		messages,
 	)
 
 	// Truncate description if it exceeds Discord's limit

@@ -10,8 +10,10 @@ type LogsConfigInterface interface {
 	MigrateLogsConfigs() error
 	GetMaxModerationLogEntries(guildID string) (int, error)
 	SetMaxModerationLogEntries(guildID string, maxEntries int) error
+	IsMaxModerationLogEntriesSet(guildID string) (bool, error)
 	GetMaxSystemLogEntries(guildID string) (int, error)
 	SetMaxSystemLogEntries(guildID string, maxEntries int) error
+	IsMaxSystemLogEntriesSet(guildID string) (bool, error)
 }
 
 func (d *Database) MigrateLogsConfigs() error {

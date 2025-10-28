@@ -14,7 +14,11 @@ type DiscordUtilsInterface interface {
 	setMaxLogRetention()
 	checkForGuildSetup()
 	sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string)
-	splitMessage(message string, limit int) []string
+	sendLogChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed)
+	sendModChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed)
+	getUserRecentMessagesString(guildID string, user *discordgo.User, limit int) string
+	logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string)
+	takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string)
 }
 
 func (d *Discord) displayConnectedGuilds() {
@@ -39,14 +43,14 @@ func (d *Discord) setMaxLogRetention() {
 		// Set default max system log entries
 		systemLogIsSet, err := d.db.IsMaxSystemLogEntriesSet(guild.ID)
 		if err != nil {
-			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "setMaxLogRetention()",
 				Message: fmt.Sprintf("Failed to check if max system log entries is set for guild %s: %v", guild.ID, err),
 			})
 		}
 		if !systemLogIsSet {
 			err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
 			if err != nil {
-				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "setMaxLogRetention()",
 					Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
 				})
 			}
@@ -55,14 +59,14 @@ func (d *Discord) setMaxLogRetention() {
 		// Set default max moderation log entries
 		moderationLogIsSet, err := d.db.IsMaxModerationLogEntriesSet(guild.ID)
 		if err != nil {
-			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "setMaxLogRetention()",
 				Message: fmt.Sprintf("Failed to check if max moderation log entries is set for guild %s: %v", guild.ID, err),
 			})
 		}
 		if !moderationLogIsSet {
 			err = d.db.SetMaxModerationLogEntries(guild.ID, 100)
 			if err != nil {
-				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "setMaxLogRetention()",
 					Message: fmt.Sprintf("Failed to set default max moderation log entries for guild %s: %v", guild.ID, err),
 				})
 			}
@@ -83,207 +87,39 @@ func (d *Discord) checkForGuildSetup() {
 
 		modRoles, err := d.db.GetModerationRolesByGuildId(guild.ID)
 		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch moderation roles for guild [%s]: %s", guild.Name, err)})
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("Failed to fetch moderation roles for guild [%s]: %s", guild.Name, err)})
 			continue
 		}
 		if len(modRoles) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No moderation roles configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("⚠️ No moderation roles configured for guild [%s]", guild.Name)})
 		}
 
 		logChannels, err := d.db.GetLogChannelsByGuildId(guild.ID)
 		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch log channels for guild [%s]: %s", guild.Name, err)})
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("Failed to fetch log channels for guild [%s]: %s", guild.Name, err)})
 			continue
 		}
 		if len(logChannels) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No log channels configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("⚠️ No log channels configured for guild [%s]", guild.Name)})
 		}
 
 		modChannels, err := d.db.GetModerationChannelsByGuildId(guild.ID)
 		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch moderation channels for guild [%s]: %s", guild.Name, err)})
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("Failed to fetch moderation channels for guild [%s]: %s", guild.Name, err)})
 			continue
 		}
 		if len(modChannels) == 0 {
-			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("⚠️ No moderation channels configured for guild [%s]", guild.Name)})
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForGuildSetup()", Message: fmt.Sprintf("⚠️ No moderation channels configured for guild [%s]", guild.Name)})
 		}
 	}
 }
 
-func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string) {
-	channel, err := s.UserChannelCreate(m.Author.ID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "sendPrivateMessage()",
-			Message:  fmt.Sprintf("Failed to create DM channel: %s", err),
-		})
-		return
-	}
-
-	_, err = s.ChannelMessageSend(channel.ID, message)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "sendPrivateMessage()",
-			Message:  fmt.Sprintf("Failed to send DM: %s", err),
-		})
-	}
-}
-
-// splitMessage splits a long message into multiple parts based on the limit
-func (d *Discord) splitMessage(message string, limit int) []string {
-	if len(message) <= limit {
-		return []string{message}
-	}
-
-	var messages []string
-	runes := []rune(message)
-
-	for len(runes) > 0 {
-		if len(runes) <= limit {
-			messages = append(messages, string(runes))
-			break
-		}
-
-		splitIndex := limit
-
-		// Try to find a good split point (newline, space, or punctuation)
-		for i := limit - 1; i > limit-200 && i > 0; i-- {
-			if runes[i] == '\n' || runes[i] == ' ' || runes[i] == '.' || runes[i] == ',' {
-				splitIndex = i + 1
-				break
-			}
-		}
-
-		messages = append(messages, string(runes[:splitIndex]))
-		runes = runes[splitIndex:]
-	}
-
-	return messages
-}
-
-// logSpamBan sends an alert to moderators about the spam ban
-// TODO : This function is temporary and will be replaced by a proper logging system
-func (d *Discord) logSpamBan(s *discordgo.Session, m *discordgo.Message, duplicateCount int) {
-	logChannels, err := d.db.GetLogChannelsByGuildId(m.GuildID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "logSpamBan()",
-			Message:  fmt.Sprintf("Failed to fetch log channels: %s", err),
-		})
-		return
-	}
-
-	if len(logChannels) == 0 {
-		return
-	}
-
-	// Get moderator roles to ping
-	modRoles, err := d.db.GetModerationRolesByGuildId(m.GuildID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "logSpamBan()",
-			Message:  fmt.Sprintf("Failed to fetch moderation roles: %s", err),
-		})
-	}
-
-	modRoleMentions := ""
-	for _, roleID := range modRoles {
-		modRoleMentions += fmt.Sprintf("<@&%s> ", roleID)
-	}
-
-	// Truncate message content if too long for embed
-	messageContent := m.Content
-	if len(messageContent) > 500 {
-		messageContent = messageContent[:497] + "..."
-	}
-
-	description := fmt.Sprintf(
-		"**Utilisateur**: <@%s> (ID: %s)\n"+
-			"**Action**: Ban automatique\n"+
-			"**Raison**: Spam (message répété %d fois en %s)\n"+
-			"**Message répété**:\n```\n%s\n```",
-		m.Author.ID,
-		m.Author.ID,
-		duplicateCount,
-		d.cache.GetViolationWindow(),
-		messageContent,
-	)
-
-	// Send alert to all moderation channels
-	for _, channelID := range logChannels {
-		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-			Content: modRoleMentions,
-			Embed: &discordgo.MessageEmbed{
-				Title:       "🚨 Spam détecté",
-				Description: description,
-				Color:       model.Red.Int(),
-				Timestamp:   time.Now().Format(time.RFC3339),
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "logSpamBan()",
-				Message:  fmt.Sprintf("Failed to send alert to channel %s: %s", channelID, err),
-			})
-		}
-	}
-}
-
-// logAutomoderationAction sends an alert to moderators about repeated violations
-// TODO : This function is temporary and will be replaced by a proper logging system
-func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, bannedWord string, triggeredRule string) {
-	logChannels, err := d.db.GetLogChannelsByGuildId(m.GuildID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "logAutomoderationAction()",
-			Message:  fmt.Sprintf("Failed to fetch log channels: %s", err),
-		})
-		return
-	}
-	if len(logChannels) == 0 {
-		d.log.LogWarning(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "logAutomoderationAction()",
-			Message:  "No moderation channels configured to send alerts",
-		})
-		return
-	}
-
-	// Get moderator roles to ping
-	modRoles, err := d.db.GetModerationRolesByGuildId(m.GuildID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "logAutomoderationAction()",
-			Message:  fmt.Sprintf("Failed to fetch moderation roles: %s", err),
-		})
-	}
-
-	modRoleMentions := ""
-	for _, roleID := range modRoles {
-		modRoleMentions += fmt.Sprintf("<@&%s> ", roleID)
-	}
-
-	// Get recent messages from this user
-	recentMessages := d.cache.GetUserRecentMessages(m.GuildID, m.Author.ID, 10)
+func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.User, limit int) string {
+	recentMessages := d.cache.GetUserRecentMessages(guildID, user.ID, limit)
 	messagesText := ""
-	const maxRecentMessagesLength = 800 // Leave room for other content in the description
+	const maxRecentMessagesLength = 800
 
-	for i, msg := range recentMessages {
+	for idx, msg := range recentMessages {
 		content := msg.Content
 
 		// Handle messages with attachments but no text
@@ -316,62 +152,158 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 			}
 		}
 
-		line := fmt.Sprintf("%d. `%s` in <#%s>\n", i+1, content, msg.ChannelID)
+		line := fmt.Sprintf("%d. `%s` in <#%s>\n", idx+1, content, msg.ChannelID)
 
-		// Check if adding this line would exceed the limit
 		if len(messagesText)+len(line) > maxRecentMessagesLength {
-			messagesText += fmt.Sprintf("... et %d message(s) de plus", len(recentMessages)-i)
+			messagesText += fmt.Sprintf("... et %d message(s) de plus", len(recentMessages)-idx)
 			break
 		}
 
 		messagesText += line
 	}
 
-	// If no messages were added, show a placeholder
 	if messagesText == "" {
 		messagesText = "*Aucun message récent disponible*"
 	}
 
-	// Build description with length check
-	description := fmt.Sprintf(
-		"**Utilisateur**: <@%s> (ID: %s)\n"+
-			"**Violations**: %d en %s\n"+
-			"**Triggered rule**: `%s`\n"+
-			"**Dernier mot interdit**: `%s`\n\n"+
-			"**Messages récents**:\n%s",
-		m.Author.ID,
-		m.Author.ID,
-		d.cache.violationThreshold,
-		d.cache.violationWindow,
-		triggeredRule,
-		bannedWord,
-		messagesText,
-	)
+	return messagesText
+}
 
-	// Truncate description if it exceeds Discord's limit (4096 chars)
-	const maxDescriptionLength = 4096
-	if len(description) > maxDescriptionLength {
-		description = description[:maxDescriptionLength-3] + "..."
+func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string) {
+	channel, err := s.UserChannelCreate(m.Author.ID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "sendPrivateMessage()",
+			Message:  fmt.Sprintf("Failed to create DM channel: %s", err),
+		})
+		return
 	}
 
-	// Send alert to all moderation channels
-	for _, channelID := range logChannels {
-		_, err = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-			Content: modRoleMentions,
-			Embed: &discordgo.MessageEmbed{
-				Title:       "🚨 Alerte : Violations répétées",
-				Description: description,
-				Color:       model.Red.Int(),
-				Timestamp:   time.Now().Format(time.RFC3339),
-			},
+	_, err = s.ChannelMessageSend(channel.ID, message)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "sendPrivateMessage()",
+			Message:  fmt.Sprintf("Failed to send DM: %s", err),
 		})
+	}
+}
+
+func (d *Discord) sendLogChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+	logChannels, err := d.db.GetLogChannelsByGuildId(guildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  guildID,
+			Function: "sendLogChannelsEmbed()",
+			Message:  fmt.Sprintf("Failed to fetch log channels: %s", err),
+		})
+		return
+	}
+
+	for _, channelID := range logChannels {
+		_, err = s.ChannelMessageSendEmbed(channelID, embed)
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  guildID,
+				Function: "sendLogChannelsEmbed()",
+				Message:  fmt.Sprintf("Failed to send embed to channel %s: %s", channelID, err),
+			})
+		}
+	}
+}
+
+func (d *Discord) sendModChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+	modChannels, err := d.db.GetModerationChannelsByGuildId(guildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  guildID,
+			Function: "sendModChannelsEmbed()",
+			Message:  fmt.Sprintf("Failed to fetch moderation channels: %s", err),
+		})
+		return
+	}
+
+	for _, channelID := range modChannels {
+		_, err = s.ChannelMessageSendEmbed(channelID, embed)
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  guildID,
+				Function: "sendModChannelsEmbed()",
+				Message:  fmt.Sprintf("Failed to send embed to channel %s: %s", channelID, err),
+			})
+		}
+	}
+}
+
+// logAutomoderationAction sends an alert to moderators and save it in DB
+func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string) {
+	// Log in the database
+	err := d.db.AddModerationLogEntry(m.GuildID, action, m.Author.ID, trigger, reason)
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: m.GuildID, Function: "logAutomoderationAction()",
+			Message: fmt.Sprintf("Error logging automod action to database: %s", err),
+		})
+	}
+
+	// Get last 10 recent messages from the user
+	recentMessages := d.getUserRecentMessagesString(m.GuildID, m.Author, 10)
+
+	description := fmt.Sprintf(
+		"**Utilisateur**: <@%s> (ID: %s)\n"+
+			"**Action**: `%s`\n"+
+			"**Triggered rule**: `%s`\n"+
+			"**Raison**: `%s`\n\n"+
+			"**Messages récents**: \n%s",
+		m.Author.ID, m.Author.ID, action, trigger, reason, recentMessages,
+	)
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "🚨 Action d'automodération déclenchée",
+		Description: description,
+		Color:       model.Violet.Int(),
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	// Send alert to all log channels
+	d.sendLogChannelsEmbed(s, m.GuildID, embed)
+}
+
+func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string) {
+	switch action {
+	case model.ActionWarn:
+		// Send a private warning message to the user
+		d.sendPrivateMessage(s, m, reason)
+		return
+	case model.ActionKick:
+		// Kick user
+		err := s.GuildMemberDeleteWithReason(m.GuildID, m.Author.ID, reason)
 		if err != nil {
 			d.log.LogError(logger.LogModel{
 				Database: d.db,
 				GuildID:  m.GuildID,
-				Function: "logAutomoderationAction()",
-				Message:  fmt.Sprintf("Failed to send alert to channel %s: %s", channelID, err),
+				Function: "takeAutomoderationAction()",
+				Message:  fmt.Sprintf("Failed to kick user %s: %s", m.Author.ID, err),
 			})
+			return
+		}
+	case model.ActionBan:
+		// Permanent ban with message deletion
+		err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, reason, 1)
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  m.GuildID,
+				Function: "takeAutomoderationAction()",
+				Message:  fmt.Sprintf("Failed to ban user %s: %s", m.Author.ID, err),
+			})
+			return
 		}
 	}
 }

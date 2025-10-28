@@ -8,7 +8,7 @@ import (
 
 type ModerationLogsInterface interface {
 	MigrateModerationLogs() error
-	AddModerationLogEntry(guildID string, logType model.ModerationLogAction, trigger string, reason string) error
+	AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, trigger string, reason string) error
 	GetModerationLogEntriesByGuild(guildID string, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesByAction(guildID string, action model.ModerationLogAction, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesCount(guildID string) (int, error)
@@ -19,6 +19,7 @@ type ModerationLogEntry struct {
 	ID        int
 	GuildID   string
 	Action    string
+	UserID    string
 	Trigger   string
 	Reason    string
 	CreatedAt string
@@ -30,6 +31,7 @@ func (d *Database) MigrateModerationLogs() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		guild_id TEXT NOT NULL,
 		action TEXT NOT NULL,
+		user_id text NOT NULL,
 		trigger TEXT NOT NULL,
 		reason TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -55,7 +57,7 @@ func (d *Database) MigrateModerationLogs() error {
 	return nil
 }
 
-func (d *Database) AddModerationLogEntry(guildID string, logType model.ModerationLogAction, trigger string, reason string) error {
+func (d *Database) AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, trigger string, reason string) error {
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.GetMaxModerationLogEntries(guildID)
 	if err != nil {
@@ -64,11 +66,11 @@ func (d *Database) AddModerationLogEntry(guildID string, logType model.Moderatio
 
 	// Insert the new log entry
 	insertQuery := `
-	INSERT INTO moderation_logs (guild_id, action, trigger, reason)
-	VALUES (?, ?, ?, ?);
+	INSERT INTO moderation_logs (guild_id, action, user_id, trigger, reason)
+	VALUES (?, ?, ?, ?, ?);
 	`
 
-	_, err = d.db.Exec(insertQuery, guildID, logType, trigger, reason)
+	_, err = d.db.Exec(insertQuery, guildID, action, userID, trigger, reason)
 	if err != nil {
 		return fmt.Errorf("failed to add log entry: %w", err)
 	}
@@ -108,7 +110,7 @@ func (d *Database) cleanupOldModerationLogEntries(guildID string, maxEntries int
 // GetModerationLogEntriesByGuild retrieves log entries for a specific guild
 func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]ModerationLogEntry, error) {
 	query := `
-	SELECT id, guild_id, action, trigger, reason, created_at
+	SELECT id, guild_id, action, user_id, trigger, reason, created_at
 	FROM moderation_logs
 	WHERE guild_id = ?
 	ORDER BY created_at DESC, id DESC
@@ -124,7 +126,7 @@ func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]
 	var entries []ModerationLogEntry
 	for rows.Next() {
 		var entry ModerationLogEntry
-		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action,
+		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action, &entry.UserID,
 			&entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan guild log entry: %w", err)
 		}
@@ -141,7 +143,7 @@ func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]
 // GetModerationLogEntriesByAction retrieves log entries for a specific guild filtered by action type
 func (d *Database) GetModerationLogEntriesByAction(guildID string, action model.ModerationLogAction, limit int) ([]ModerationLogEntry, error) {
 	query := `
-		SELECT id, guild_id, action, trigger, reason, created_at
+		SELECT id, guild_id, action, user_id, trigger, reason, created_at
 		FROM moderation_logs
 		WHERE guild_id = ? AND action = ?
 		ORDER BY created_at DESC, id DESC
@@ -157,7 +159,7 @@ func (d *Database) GetModerationLogEntriesByAction(guildID string, action model.
 	var entries []ModerationLogEntry
 	for rows.Next() {
 		var entry ModerationLogEntry
-		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action,
+		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action, &entry.UserID,
 			&entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan moderation log entry: %w", err)
 		}

@@ -8,6 +8,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
+	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
 // messageCreateHandler handles new messages created in guilds
@@ -140,6 +142,12 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
+			// Check if threshold is reached
+			if violationCount >= d.cache.violationThreshold {
+				d.logAutomoderationAction(s, m, model.ActionBan, "banned_word_check", fmt.Sprintf("%d automod violations", violationCount))
+				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%d automod violations", violationCount))
+			}
+
 			// Delete the message
 			err := s.ChannelMessageDelete(m.ChannelID, m.ID)
 			if err != nil {
@@ -150,12 +158,6 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 					Message:  fmt.Sprintf("Failed to delete message: %s", err),
 				})
 				return
-			}
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				d.logAutomoderationAction(s, m, bannedWord.WordPattern, "Banned Words")
-				// TODO : Log this and take further actions (mute, kick, ban, etc.)
 			}
 
 			// Send a warning to the user
@@ -181,7 +183,7 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 
 			d.sendPrivateMessage(s, m, warningMessage)
 
-			message := d.splitMessage(m.Content, 1900)
+			message := utils.SplitMessage(m.Content, 1900)
 			for _, msgPart := range message {
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
@@ -258,6 +260,12 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
+			// Check if threshold is reached
+			if violationCount >= d.cache.violationThreshold {
+				d.logAutomoderationAction(s, m, model.ActionBan, "banned_website_check", fmt.Sprintf("%d automod violations", violationCount))
+				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%d automod violations", violationCount))
+			}
+
 			// Delete the message
 			err := s.ChannelMessageDelete(m.ChannelID, m.ID)
 			if err != nil {
@@ -268,12 +276,6 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 					Message:  fmt.Sprintf("Failed to delete message: %s", err),
 				})
 				return
-			}
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				d.logAutomoderationAction(s, m, bannedWebsite.WebsiteURL, "Banned Websites")
-				// TODO : Log this and take further actions (mute, kick, ban, etc.)
 			}
 
 			// Send a warning to the user
@@ -291,15 +293,16 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 				guildName = guild.Name
 			}
 
+			d.logAutomoderationAction(s, m, model.ActionWarn, "banned_website_check", fmt.Sprintf("Site banni: `%s`", bannedWebsite.WebsiteURL))
 			warningMessage := fmt.Sprintf(
 				"⚠️ **Avertissement %d/%d**\n"+
 					"Votre message sur le serveur [%s] a été supprimé car il contient un lien interdit : `%s`\n\n"+
 					"Voici une copie de votre message :\n",
 				violationCount, d.cache.violationThreshold, guildName, bannedWebsite.WebsiteURL)
+			d.takeAutomoderationAction(s, m, model.ActionWarn, warningMessage)
 
-			d.sendPrivateMessage(s, m, warningMessage)
-
-			message := d.splitMessage(m.Content, 1900)
+			// Send a copy of the deleted message
+			message := utils.SplitMessage(m.Content, 1900)
 			for _, msgPart := range message {
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
@@ -358,20 +361,10 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
 
 	// If threshold is reached, ban the user
 	if duplicateCount >= d.cache.GetViolationThreshold() {
-		// Permanent ban with message deletion
-		err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()), 1)
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "checkMessageSpam()",
-				Message:  fmt.Sprintf("Failed to ban user %s: %s", m.Author.ID, err),
-			})
-			return
-		}
-
-		// Log the action to moderation channels
-		d.logSpamBan(s, m, duplicateCount)
+		// Log the automoderation action
+		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
+		// Take the ban action
+		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
 
 		d.log.LogSuccess(logger.LogModel{
 			Database: d.db,
