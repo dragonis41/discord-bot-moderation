@@ -155,6 +155,10 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
+			Name:        "list-banned-words",
+			Description: "Affiche la liste des mots interdits",
+		},
+		{
 			Name:        "remove-banned-word",
 			Description: "Supprime un mot de la liste des mots interdits",
 			Options: []*discordgo.ApplicationCommandOption{
@@ -165,10 +169,6 @@ func (d *Discord) registerSlashCommands() {
 					Required:    true,
 				},
 			},
-		},
-		{
-			Name:        "list-banned-words",
-			Description: "Affiche la liste des mots interdits",
 		},
 		{
 			Name:        "add-banned-website",
@@ -183,6 +183,10 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
+			Name:        "list-banned-websites",
+			Description: "Affiche la liste des sites web interdits",
+		},
+		{
 			Name:        "remove-banned-website",
 			Description: "Supprime un site web de la liste des sites interdits",
 			Options: []*discordgo.ApplicationCommandOption{
@@ -195,12 +199,8 @@ func (d *Discord) registerSlashCommands() {
 			},
 		},
 		{
-			Name:        "list-banned-websites",
-			Description: "Affiche la liste des sites web interdits",
-		},
-		{
-			Name:        "configure-automoderation",
-			Description: "Configure les fonctionnalités d'automodération",
+			Name:        "configure-automod",
+			Description: "Active ou désactive les fonctionnalités d'automodération",
 		},
 		{
 			Name:        "help",
@@ -242,18 +242,18 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.selectModeratorRoles(s, i)
 	case "add-banned-word":
 		d.addBannedWord(s, i)
-	case "remove-banned-word":
-		d.removeBannedWord(s, i)
 	case "list-banned-words":
 		d.listBannedWords(s, i)
+	case "remove-banned-word":
+		d.removeBannedWord(s, i)
 	case "add-banned-website":
 		d.addBannedWebsite(s, i)
-	case "remove-banned-website":
-		d.removeBannedWebsite(s, i)
 	case "list-banned-websites":
 		d.listBannedWebsites(s, i)
-	case "configure-automoderation":
-		d.configureAutomoderation(s, i)
+	case "remove-banned-website":
+		d.removeBannedWebsite(s, i)
+	case "configure-automod":
+		d.configureAutomod(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}

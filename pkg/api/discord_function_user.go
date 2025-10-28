@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -277,12 +276,8 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 		var field discordgo.MessageEmbedField
 		field.Inline = false
 
-		switch {
-		case strings.HasPrefix(cmd.Name, "help"):
-			field.Name = "💡 `/" + cmd.Name + "`"
-		default:
-			field.Name = "`/" + cmd.Name + "`"
-		}
+		field.Name = "----------------------------------------\n"
+		field.Name += fmt.Sprintf("**`/%s`**\n", cmd.Name)
 
 		value := fmt.Sprintf("%s\n", cmd.Description)
 		if len(cmd.Options) > 0 {

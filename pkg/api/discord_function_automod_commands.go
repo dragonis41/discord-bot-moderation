@@ -17,7 +17,7 @@ type DiscordAutomodCommandsInterface interface {
 	addBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate)
 	removeBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate)
 	listBannedWebsites(s *discordgo.Session, i *discordgo.InteractionCreate)
-	configureAutomoderation(s *discordgo.Session, i *discordgo.InteractionCreate)
+	configureAutomod(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
 func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -557,7 +557,7 @@ func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.Interact
 	}
 }
 
-func (d *Discord) configureAutomoderation(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) configureAutomod(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Defer the response
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -566,13 +566,13 @@ func (d *Discord) configureAutomoderation(s *discordgo.Session, i *discordgo.Int
 		},
 	})
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "configureAutomoderation()",
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "configureAutomod()",
 			Message: fmt.Sprintf("Error deferring response: %s", err),
 		})
 		return
 	}
 
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "configureAutomoderation()",
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "configureAutomod()",
 		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
 	})
 
