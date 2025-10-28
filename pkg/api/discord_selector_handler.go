@@ -108,3 +108,51 @@ func (d *Discord) handleModRoleSelection(s *discordgo.Session, i *discordgo.Inte
 	config, dbOps := d.getModRoleConfig()
 	d.handleSelection(s, i, config, dbOps, d.getRolesAsItems, formatDoneMessage)
 }
+
+func (d *Discord) getAutomodSettingsConfig() (SelectionConfig, DatabaseOperations) {
+	config := SelectionConfig{
+		Prefix:          "automod",
+		ItemsPerPage:    25,
+		Title:           "⚙️ Configuration Automodération",
+		Description:     "Sélectionnez les fonctionnalités d'automodération à activer puis cliquez sur \"Terminer\".",
+		Placeholder:     "Sélectionnez les fonctionnalités à activer",
+		DoneDescription: "⚠️ Toutes les fonctionnalités d'automodération sont désactivées",
+		EmojiName:       "",
+	}
+	return config, &AutomodSettingsDB{db: d.db}
+}
+
+func (d *Discord) handleAutomoderationSettings(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	formatDoneMessage := func(items []SelectionItem) string {
+		var featureNames []string
+		for _, item := range items {
+			featureNames = append(featureNames, fmt.Sprintf("• %s", item.GetName()))
+		}
+
+		return fmt.Sprintf("✅ Configuration enregistrée avec succès!\n\n**Fonctionnalités activées** (%d):\n%s", len(featureNames), strings.Join(featureNames, "\n"))
+	}
+
+	config, dbOps := d.getAutomodSettingsConfig()
+	d.handleSelection(s, i, config, dbOps, d.getAutomoderationFeaturesAsItems, formatDoneMessage)
+}
+
+func (d *Discord) getAutomoderationFeaturesAsItems(s *discordgo.Session, guildID string) ([]SelectionItem, error) {
+	features := []SelectionItem{
+		AutomodFeatureItem{
+			ID:          "banned_words",
+			Name:        "📝 Mots interdits",
+			Description: "Détecte et supprime les messages contenant des mots interdits",
+		},
+		AutomodFeatureItem{
+			ID:          "banned_websites",
+			Name:        "🌐 Sites web interdits",
+			Description: "Bloque les liens vers des sites web interdits",
+		},
+		AutomodFeatureItem{
+			ID:          "spam_detection",
+			Name:        "🚨 Détection de spam",
+			Description: "Bannit automatiquement les utilisateurs qui spam des messages",
+		},
+	}
+	return features, nil
+}

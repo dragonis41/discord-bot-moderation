@@ -48,6 +48,17 @@ func (r RoleItem) GetID() string          { return r.ID }
 func (r RoleItem) GetName() string        { return r.Name }
 func (r RoleItem) GetDescription() string { return "" }
 
+// AutomodFeatureItem represents an automoderation feature
+type AutomodFeatureItem struct {
+	ID          string
+	Name        string
+	Description string
+}
+
+func (a AutomodFeatureItem) GetID() string          { return a.ID }
+func (a AutomodFeatureItem) GetName() string        { return a.Name }
+func (a AutomodFeatureItem) GetDescription() string { return a.Description }
+
 // DatabaseOperations defines the database operations needed
 type DatabaseOperations interface {
 	GetSelected(guildID string) ([]string, error)
@@ -509,6 +520,59 @@ func (r *ModRoleDB) RemoveByGuild(guildID string) error {
 
 func (r *ModRoleDB) Add(guildID, itemID string) error {
 	return r.db.AddModerationRole(guildID, itemID)
+}
+
+type AutomodSettingsDB struct {
+	db *database.Database
+}
+
+func (a *AutomodSettingsDB) GetSelected(guildID string) ([]string, error) {
+	settings, err := a.db.GetAutomoderationSettings(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	var enabled []string
+	if settings.BannedWordsEnabled {
+		enabled = append(enabled, "banned_words")
+	}
+	if settings.BannedWebsitesEnabled {
+		enabled = append(enabled, "banned_websites")
+	}
+	if settings.SpamDetectionEnabled {
+		enabled = append(enabled, "spam_detection")
+	}
+	return enabled, nil
+}
+
+func (a *AutomodSettingsDB) RemoveByGuild(guildID string) error {
+	// Set all to disabled
+	return a.db.SetAutomoderationSettings(guildID, &database.AutomoderationSettings{
+		GuildID:               guildID,
+		BannedWordsEnabled:    false,
+		BannedWebsitesEnabled: false,
+		SpamDetectionEnabled:  false,
+	})
+}
+
+func (a *AutomodSettingsDB) Add(guildID, itemID string) error {
+	// Get current settings
+	settings, err := a.db.GetAutomoderationSettings(guildID)
+	if err != nil {
+		return err
+	}
+
+	// Enable the specified feature
+	switch itemID {
+	case "banned_words":
+		settings.BannedWordsEnabled = true
+	case "banned_websites":
+		settings.BannedWebsitesEnabled = true
+	case "spam_detection":
+		settings.SpamDetectionEnabled = true
+	}
+
+	return a.db.SetAutomoderationSettings(guildID, settings)
 }
 
 func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interaction, title, description string) {

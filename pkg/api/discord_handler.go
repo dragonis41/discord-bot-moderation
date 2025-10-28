@@ -37,13 +37,14 @@ func (d *Discord) RunDiscordBot() {
 	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	// add an event handler for slash commands
-	d.client.AddHandler(d.slashCommandHandler)       // Handler for slash commands
-	d.client.AddHandler(d.handleLogChannelSelection) // Handler for message component interaction for log channel selection
-	d.client.AddHandler(d.handleModChannelSelection) // Handler for message component interaction for moderation channel selection
-	d.client.AddHandler(d.handleModRoleSelection)    // Handler for message component interaction for role selection
-	d.client.AddHandler(d.messageCreateHandler)      // Handler for message creation events
-	d.client.AddHandler(d.messageUpdateHandler)      // Handler for message update events
-	d.client.AddHandler(d.handleReportActions)       // Handler for report action buttons (kick/ban)
+	d.client.AddHandler(d.slashCommandHandler)          // Handler for slash commands
+	d.client.AddHandler(d.handleLogChannelSelection)    // Handler for message component interaction for log channel selection
+	d.client.AddHandler(d.handleModChannelSelection)    // Handler for message component interaction for moderation channel selection
+	d.client.AddHandler(d.handleModRoleSelection)       // Handler for message component interaction for role selection
+	d.client.AddHandler(d.handleAutomoderationSettings) // Handler for automoderation settings selection
+	d.client.AddHandler(d.messageCreateHandler)         // Handler for message creation events
+	d.client.AddHandler(d.messageUpdateHandler)         // Handler for message update events
+	d.client.AddHandler(d.handleReportActions)          // Handler for report action buttons (kick/ban)
 
 	// open session
 	err := d.client.Open()
@@ -136,6 +137,72 @@ func (d *Discord) registerSlashCommands() {
 			Description: "Sélectionne les roles qui auront les permissions de modération",
 		},
 		{
+			Name:        "add-banned-word",
+			Description: "Ajoute un mot ou une expression à la liste des mots interdits",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "word",
+					Description: "Le mot ou la regex à interdire",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionBoolean,
+					Name:        "is_regex",
+					Description: "Si le mot est une regex",
+					Required:    false,
+				},
+			},
+		},
+		{
+			Name:        "remove-banned-word",
+			Description: "Supprime un mot de la liste des mots interdits",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "id",
+					Description: "L'ID du mot à supprimer (utilisez /list-banned-words pour voir les IDs)",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "list-banned-words",
+			Description: "Affiche la liste des mots interdits",
+		},
+		{
+			Name:        "add-banned-website",
+			Description: "Ajoute un site web à la liste des sites interdits",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "url",
+					Description: "L'URL du site à interdire (ex: example.com)",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "remove-banned-website",
+			Description: "Supprime un site web de la liste des sites interdits",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "id",
+					Description: "L'ID du site à supprimer (utilisez /list-banned-websites pour voir les IDs)",
+					Required:    true,
+				},
+			},
+		},
+		{
+			Name:        "list-banned-websites",
+			Description: "Affiche la liste des sites web interdits",
+		},
+		{
+			Name:        "configure-automoderation",
+			Description: "Configure les fonctionnalités d'automodération",
+		},
+		{
 			Name:        "help",
 			Description: "Liste toutes les commandes disponibles",
 		},
@@ -173,6 +240,20 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.selectModeratorChannels(s, i)
 	case "set-moderation-roles":
 		d.selectModeratorRoles(s, i)
+	case "add-banned-word":
+		d.addBannedWord(s, i)
+	case "remove-banned-word":
+		d.removeBannedWord(s, i)
+	case "list-banned-words":
+		d.listBannedWords(s, i)
+	case "add-banned-website":
+		d.addBannedWebsite(s, i)
+	case "remove-banned-website":
+		d.removeBannedWebsite(s, i)
+	case "list-banned-websites":
+		d.listBannedWebsites(s, i)
+	case "configure-automoderation":
+		d.configureAutomoderation(s, i)
 	case "help":
 		d.showHelp(s, i)
 	}
