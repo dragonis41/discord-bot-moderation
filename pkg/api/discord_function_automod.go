@@ -10,6 +10,10 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 )
 
+// messageCreateHandler handles new messages created in guilds
+//
+//	It ignores messages from bots and itself, as well as private messages (DMs).
+//	It adds the message to cache and calls the common moderation function.
 func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Ignore messages from bots and itself
 	if m.Author != nil && m.Author.Bot || m.Author.ID == s.State.User.ID {
@@ -19,19 +23,17 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 	if m.GuildID == "" {
 		return
 	}
-	// Ignore messages from moderators
-	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
-		return
-	}
-	// TODO : Check if the message is sent in an excluded channel
 
 	// Add message to cache
 	d.cache.AddMessage(m)
-
 	// Use the common moderation function
 	d.moderateMessage(s, m.Message)
 }
 
+// messageUpdateHandler handles edited messages in guilds
+//
+//	It ignores messages from bots and itself, as well as private messages (DMs).
+//	It updates the message in cache and calls the common moderation function.
 func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	// Ignore messages from bots and itself
 	if m.Author != nil && m.Author.Bot || m.Author.ID == s.State.User.ID {
@@ -41,24 +43,29 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 	if m.GuildID == "" {
 		return
 	}
-	// Ignore messages from moderators
-	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
-		return
-	}
-	// TODO : Check if the message is sent in an excluded channel
 
 	// Update the message in cache
 	d.cache.UpdateMessage(m)
-
 	// Use the common moderation function
 	d.moderateMessage(s, m.Message)
 }
 
 // Common function that handles moderation logic
 //
-// This function is called by both message create and update handlers.
-// It is used to call the various moderation checks.
+//	This function is called by both message create and update handlers.
+//	It is used to call the various moderation checks.
+//
+//	It ignores messages from moderators and messages sent in excluded channels. The checks are here because we still want to update the cache for those messages.
 func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
+	// Ignore messages from moderators
+	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
+		return
+	}
+	// Ignore if the message is sent in an excluded channel
+	if d.db.IsExcludedChannel(m.GuildID, m.ChannelID) {
+		return
+	}
+
 	d.checkMessageSpam(s, m)
 	d.checkBannedWords(s, m)
 	d.checkBannedWebsites(s, m)

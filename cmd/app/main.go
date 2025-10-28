@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
@@ -19,12 +20,13 @@ func init() {
 func main() {
 	l := logger.NewLogger()
 
+	// Initialize the database
 	db, err := database.NewDatabase()
 	if err != nil {
 		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while initializing the database: %s", err)})
 		return
 	}
-
+	// Migrate the database
 	l.LogInfo(logger.LogModel{Message: "Starting database migration..."})
 	if err := db.Migrate(); err != nil {
 		l.LogError(logger.LogModel{Message: fmt.Sprintf("Error while migrating the database: %s", err)})
@@ -33,13 +35,13 @@ func main() {
 	l.LogSuccess(logger.LogModel{Message: "Database initialized successfully"})
 
 	// Create the Discord client
-	discordClient, err := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN"))
+	discord, err := discordgo.New("Bot " + os.Getenv("DISCORD_BOT_TOKEN"))
 	if err != nil {
 		l.LogError(logger.LogModel{Database: db, Function: "main()", Message: fmt.Sprintf("Error while creating the Discord client: %s", err)})
 		return
 	}
 
-	client := api.NewClient(l, db, discordClient)
+	client := api.NewClient(l, db, discord, api.NewCache(100, 3, 5*time.Minute))
 	client.RunDiscordBot()
 
 	if err := db.CloseDatabase(); err != nil {

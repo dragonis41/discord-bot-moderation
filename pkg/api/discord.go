@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
@@ -21,12 +20,12 @@ type Discord struct {
 	cache  *Cache
 }
 
-func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session) *Discord {
+func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session, cache *Cache) *Discord {
 	return &Discord{
 		log:    log,
 		db:     db,
 		client: discordClient,
-		cache:  NewCache(100, 3, 5*time.Minute),
+		cache:  cache,
 	}
 }
 
@@ -79,7 +78,7 @@ func (d *Discord) RunDiscordBot() {
 	}
 
 	// Set max log retention for system and moderation logs
-	d.SetMaxLogRetention()
+	d.setMaxLogRetention()
 
 	// Initialize uptime tracking
 	utils.NewUptime()

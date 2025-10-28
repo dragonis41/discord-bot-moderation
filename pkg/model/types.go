@@ -27,6 +27,18 @@ func (l ModerationLogAction) String() string {
 	return string(l)
 }
 
+type ChannelType string
+
+const (
+	ChannelTypeLog        = "LOG"
+	ChannelTypeModeration = "MODERATION"
+	ChannelTypeExcluded   = "EXCLUDED"
+)
+
+func (l ChannelType) String() string {
+	return string(l)
+}
+
 type Color struct {
 	ansi string
 	hex  int
