@@ -89,6 +89,8 @@ func (d *Discord) RunDiscordBot() {
 	// Initialize uptime tracking
 	utils.NewUptime()
 
+	// TODO : Check if the roles and channels are set for each guild, if not, log a warning
+
 	// keep bot running until there is an os interruption (ctrl+c or SIGTERM signal)
 	fmt.Printf("\n")
 	log.Printf("Bot running....\n")
