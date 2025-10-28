@@ -44,7 +44,7 @@ func (d *Database) GetMaxModerationLogEntries(guildID string) (int, error) {
 	if err != nil {
 		// If no config exists, return default
 		if errors.Is(err, sql.ErrNoRows) {
-			return 10000, nil
+			return 100, nil
 		}
 		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
 	}
@@ -72,6 +72,24 @@ func (d *Database) SetMaxModerationLogEntries(guildID string, maxEntries int) er
 	}
 
 	return nil
+}
+
+// IsMaxModerationLogEntriesSet checks if the max moderation log entries is set for a guild
+func (d *Database) IsMaxModerationLogEntriesSet(guildID string) (bool, error) {
+	var exists bool
+	query := `
+	SELECT EXISTS(
+		SELECT 1 FROM logs_config
+		WHERE guild_id = ? AND max_moderation_log_entries IS NOT NULL
+	);
+	`
+
+	err := d.db.QueryRow(query, guildID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if max moderation log entries is set: %w", err)
+	}
+
+	return exists, nil
 }
 
 // GetMaxSystemLogEntries retrieves the max entries configuration for a guild
@@ -119,4 +137,22 @@ func (d *Database) SetMaxSystemLogEntries(guildID string, maxEntries int) error 
 	}
 
 	return nil
+}
+
+// IsMaxSystemLogEntriesSet checks if the max system log entries is set for a guild
+func (d *Database) IsMaxSystemLogEntriesSet(guildID string) (bool, error) {
+	var exists bool
+	query := `
+	SELECT EXISTS(
+		SELECT 1 FROM logs_config
+		WHERE guild_id = ? AND max_system_log_entries IS NOT NULL
+	);
+	`
+
+	err := d.db.QueryRow(query, guildID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if max system log entries is set: %w", err)
+	}
+
+	return exists, nil
 }

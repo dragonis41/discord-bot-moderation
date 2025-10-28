@@ -59,8 +59,7 @@ func (d *Database) AddSystemLogEntry(guildID string, logType model.SystemLogType
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.GetMaxSystemLogEntries(guildID)
 	if err != nil {
-		// If error or no config exists, use default of 10000
-		maxEntries = 10000
+		return fmt.Errorf("failed to get max system logs entries: %w", err)
 	}
 
 	// Insert the new log entry

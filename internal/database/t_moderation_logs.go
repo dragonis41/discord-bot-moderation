@@ -59,8 +59,7 @@ func (d *Database) AddModerationLogEntry(guildID string, logType model.Moderatio
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.GetMaxModerationLogEntries(guildID)
 	if err != nil {
-		// If error or no config exists, use default of 100
-		maxEntries = 100
+		return fmt.Errorf("failed to get max guild log entries: %w", err)
 	}
 
 	// Insert the new log entry

@@ -37,19 +37,35 @@ func (d *Discord) setMaxLogRetention() {
 	// Set default max log entries for each connected guild
 	for _, guild := range d.client.State.Guilds {
 		// Set default max system log entries
-		err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
+		systemLogIsSet, err := d.db.IsMaxSystemLogEntriesSet(guild.ID)
 		if err != nil {
 			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-				Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
+				Message: fmt.Sprintf("Failed to check if max system log entries is set for guild %s: %v", guild.ID, err),
 			})
+		}
+		if !systemLogIsSet {
+			err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
+			if err != nil {
+				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+					Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
+				})
+			}
 		}
 
 		// Set default max moderation log entries
-		err = d.db.SetMaxModerationLogEntries(guild.ID, 100)
+		moderationLogIsSet, err := d.db.IsMaxModerationLogEntriesSet(guild.ID)
 		if err != nil {
 			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-				Message: fmt.Sprintf("Failed to set default max moderation log entries for guild %s: %v", guild.ID, err),
+				Message: fmt.Sprintf("Failed to check if max moderation log entries is set for guild %s: %v", guild.ID, err),
 			})
+		}
+		if !moderationLogIsSet {
+			err = d.db.SetMaxModerationLogEntries(guild.ID, 100)
+			if err != nil {
+				d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+					Message: fmt.Sprintf("Failed to set default max moderation log entries for guild %s: %v", guild.ID, err),
+				})
+			}
 		}
 	}
 }
