@@ -6,11 +6,29 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/internal/database"
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
+
+type Discord struct {
+	log    *logger.Logger
+	db     *database.Database
+	client *discordgo.Session
+	cache  *Cache
+}
+
+func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session) *Discord {
+	return &Discord{
+		log:    log,
+		db:     db,
+		client: discordClient,
+		cache:  NewCache(100, 3, 5*time.Minute),
+	}
+}
 
 type DiscordHandlerInterface interface {
 	RunDiscordBot()
@@ -60,15 +78,8 @@ func (d *Discord) RunDiscordBot() {
 		})
 	}
 
-	// Set default max log entries for each connected guild
-	for _, guild := range d.client.State.Guilds {
-		err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
-		if err != nil {
-			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-				Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
-			})
-		}
-	}
+	// Set max log retention for system and moderation logs
+	d.SetMaxLogRetention()
 
 	// Initialize uptime tracking
 	utils.NewUptime()

@@ -1,19 +1,16 @@
 package database
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 type SystemLogsInterface interface {
+	MigrateSystemLogs() error
 	AddSystemLogEntry(guildID string, logType model.SystemLogType, function string, content string) error
 	GetSystemLogEntriesByGuild(guildID string, limit int) ([]SystemLogEntry, error)
 	GetSystemLogEntriesErrorsByGuildAndSystem(guildID string, limit int) ([]SystemLogEntry, error)
-	GetSystemLogEntriesCount(guildID string) (int, error)
-	SetMaxSystemLogEntries(guildID string, maxEntries int) error
 	GetMaxSystemLogEntries(guildID string) (int, error)
 }
 
@@ -55,25 +52,12 @@ func (d *Database) MigrateSystemLogs() error {
 		return fmt.Errorf("failed to create system_logs index: %w", err)
 	}
 
-	// Create a table to store max log entries configuration per guild
-	createConfigTableQuery := `
-	CREATE TABLE IF NOT EXISTS logs_config (
-		guild_id TEXT PRIMARY KEY,
-		max_entries INTEGER DEFAULT 10000
-	);
-	`
-
-	_, err = d.db.Exec(createConfigTableQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create logs_config table: %w", err)
-	}
-
 	return nil
 }
 
 func (d *Database) AddSystemLogEntry(guildID string, logType model.SystemLogType, function string, content string) error {
 	// First, get the max entries limit for this guild
-	maxEntries, err := d.getMaxSystemLogEntries(guildID)
+	maxEntries, err := d.GetMaxSystemLogEntries(guildID)
 	if err != nil {
 		// If error or no config exists, use default of 10000
 		maxEntries = 10000
@@ -120,58 +104,6 @@ func (d *Database) cleanupOldSystemLogEntries(guildID string, maxEntries int) er
 	}
 
 	return nil
-}
-
-// getMaxSystemLogEntries retrieves the max entries configuration for a guild
-func (d *Database) getMaxSystemLogEntries(guildID string) (int, error) {
-	var maxEntries int
-	query := `
-	SELECT max_entries FROM logs_config
-	WHERE guild_id = ?;
-	`
-
-	err := d.db.QueryRow(query, guildID).Scan(&maxEntries)
-	if err != nil {
-		// If no config exists, return default
-		if errors.Is(err, sql.ErrNoRows) {
-			return 10000, nil
-		}
-		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
-	}
-
-	return maxEntries, nil
-}
-
-// SetMaxSystemLogEntries sets the maximum number of log entries for a guild
-func (d *Database) SetMaxSystemLogEntries(guildID string, maxEntries int) error {
-	// Insert or update the configuration
-	query := `
-	INSERT INTO logs_config (guild_id, max_entries)
-	VALUES (?, ?)
-	ON CONFLICT(guild_id) DO UPDATE SET max_entries = excluded.max_entries;
-	`
-
-	_, err := d.db.Exec(query, guildID, maxEntries)
-	if err != nil {
-		return fmt.Errorf("failed to set max guild log entries: %w", err)
-	}
-
-	// Immediately clean guild's logs if the new limit is lower than current count
-	if err := d.cleanupOldSystemLogEntries(guildID, maxEntries); err != nil {
-		return fmt.Errorf("failed to cleanup guild logs after setting new limit: %w", err)
-	}
-
-	// Also cleanup system logs
-	if err := d.cleanupOldSystemLogEntries("", maxEntries); err != nil {
-		return fmt.Errorf("failed to cleanup system logs after setting new limit: %w", err)
-	}
-
-	return nil
-}
-
-// GetMaxSystemLogEntries retrieves the maximum number of log entries configured for a guild
-func (d *Database) GetMaxSystemLogEntries(guildID string) (int, error) {
-	return d.getMaxSystemLogEntries(guildID)
 }
 
 // GetSystemLogEntriesByGuild retrieves log entries for a specific guild

@@ -32,6 +32,27 @@ func (d *Discord) displayConnectedGuilds() {
 	fmt.Printf("===============================================\n\n")
 }
 
+func (d *Discord) SetMaxLogRetention() {
+	// Set default max log entries for each connected guild
+	for _, guild := range d.client.State.Guilds {
+		// Set default max system log entries
+		err := d.db.SetMaxSystemLogEntries(guild.ID, 10000)
+		if err != nil {
+			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+				Message: fmt.Sprintf("Failed to set default max log entries for guild %s: %v", guild.ID, err),
+			})
+		}
+
+		// Set default max moderation log entries
+		err = d.db.SetMaxModerationLogEntries(guild.ID, 100)
+		if err != nil {
+			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
+				Message: fmt.Sprintf("Failed to set default max moderation log entries for guild %s: %v", guild.ID, err),
+			})
+		}
+	}
+}
+
 // checkForGuildSetup checks if the guilds are properly set up in the database
 func (d *Discord) checkForGuildSetup() {
 	for _, guild := range d.client.State.Guilds {

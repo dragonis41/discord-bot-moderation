@@ -1,8 +1,6 @@
 package database
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
@@ -11,8 +9,6 @@ import (
 type ModerationLogsInterface interface {
 	MigrateModerationLogs() error
 	AddModerationLogEntry(guildID string, logType model.ModerationLogAction, trigger string, reason string) error
-	SetMaxModerationLogEntries(guildID string, maxEntries int) error
-	GetMaxModerationLogEntries(guildID string) (int, error)
 	GetModerationLogEntriesByGuild(guildID string, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesByAction(guildID string, action model.ModerationLogAction, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesCount(guildID string) (int, error)
@@ -56,25 +52,12 @@ func (d *Database) MigrateModerationLogs() error {
 		return fmt.Errorf("failed to create moderation_logs index: %w", err)
 	}
 
-	// Create a table to store max log entries configuration per guild
-	createConfigTableQuery := `
-	CREATE TABLE IF NOT EXISTS moderation_logs_config (
-		guild_id TEXT PRIMARY KEY,
-		max_entries INTEGER DEFAULT 100
-	);
-	`
-
-	_, err = d.db.Exec(createConfigTableQuery)
-	if err != nil {
-		return fmt.Errorf("failed to create moderation_logs_config table: %w", err)
-	}
-
 	return nil
 }
 
 func (d *Database) AddModerationLogEntry(guildID string, logType model.ModerationLogAction, trigger string, reason string) error {
 	// First, get the max entries limit for this guild
-	maxEntries, err := d.getMaxModerationLogEntries(guildID)
+	maxEntries, err := d.GetMaxModerationLogEntries(guildID)
 	if err != nil {
 		// If error or no config exists, use default of 100
 		maxEntries = 100
@@ -121,53 +104,6 @@ func (d *Database) cleanupOldModerationLogEntries(guildID string, maxEntries int
 	}
 
 	return nil
-}
-
-// getMaxModerationLogEntries retrieves the max entries configuration for a guild
-func (d *Database) getMaxModerationLogEntries(guildID string) (int, error) {
-	var maxEntries int
-	query := `
-	SELECT max_entries FROM moderation_logs_config
-	WHERE guild_id = ?;
-	`
-
-	err := d.db.QueryRow(query, guildID).Scan(&maxEntries)
-	if err != nil {
-		// If no config exists, return default
-		if errors.Is(err, sql.ErrNoRows) {
-			return 10000, nil
-		}
-		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
-	}
-
-	return maxEntries, nil
-}
-
-// SetMaxModerationLogEntries sets the maximum number of log entries for a guild
-func (d *Database) SetMaxModerationLogEntries(guildID string, maxEntries int) error {
-	// Insert or update the configuration
-	query := `
-	INSERT INTO moderation_logs_config (guild_id, max_entries)
-	VALUES (?, ?)
-	ON CONFLICT(guild_id) DO UPDATE SET max_entries = excluded.max_entries;
-	`
-
-	_, err := d.db.Exec(query, guildID, maxEntries)
-	if err != nil {
-		return fmt.Errorf("failed to set max guild log entries: %w", err)
-	}
-
-	// Immediately clean guild's logs if the new limit is lower than current count
-	if err := d.cleanupOldModerationLogEntries(guildID, maxEntries); err != nil {
-		return fmt.Errorf("failed to cleanup guild logs after setting new limit: %w", err)
-	}
-
-	return nil
-}
-
-// GetMaxModerationLogEntries retrieves the maximum number of log entries configured for a guild
-func (d *Database) GetMaxModerationLogEntries(guildID string) (int, error) {
-	return d.getMaxModerationLogEntries(guildID)
 }
 
 // GetModerationLogEntriesByGuild retrieves log entries for a specific guild
