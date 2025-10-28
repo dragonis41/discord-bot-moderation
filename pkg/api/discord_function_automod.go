@@ -169,19 +169,21 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 			warningMessage := fmt.Sprintf(
 				"⚠️ **Avertissement %d/%d**\n"+
 					"Votre message sur le serveur [%s] a été supprimé car il contient le mot `%s`\n\n"+
-					"Voici une copie de votre message :\n```\n%s\n```",
-				violationCount, d.cache.violationThreshold, guildName, bannedWord.WordPattern, m.Content)
+					"Voici une copie de votre message :\n",
+				violationCount, d.cache.violationThreshold, guildName, bannedWord.WordPattern)
 
-			if violationCount >= d.cache.violationThreshold {
-				warningMessage += "\n🚨 **Les modérateurs ont été alertés.**"
-			}
 			d.sendPrivateMessage(s, m, warningMessage)
+
+			message := d.splitMessage(m.Content, 1900)
+			for _, msgPart := range message {
+				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
+			}
 
 			d.log.LogInfo(logger.LogModel{
 				Database: d.db,
 				GuildID:  m.GuildID,
 				Function: "sendPrivateMessage()",
-				Message: fmt.Sprintf("Deleted message from %s containing banned word: %s (violation %d/%d)",
+				Message: fmt.Sprintf("Deleted message from %s containing banned word: [%s] (violation %d/%d)",
 					m.Author.Username, bannedWord.WordPattern, violationCount, d.cache.violationThreshold),
 			})
 
@@ -299,7 +301,7 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 				Database: d.db,
 				GuildID:  m.GuildID,
 				Function: "checkBannedWebsites()",
-				Message: fmt.Sprintf("Deleted message from %s containing banned website: %s (violation %d/%d)",
+				Message: fmt.Sprintf("Deleted message from %s containing banned website: [%s] (violation %d/%d)",
 					m.Author.Username, bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold),
 			})
 

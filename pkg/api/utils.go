@@ -10,8 +10,66 @@ import (
 )
 
 type DiscordUtilsInterface interface {
+	displayConnectedGuilds()
+	checkForGuildSetup()
 	sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string)
 	splitMessage(message string, limit int) []string
+}
+
+func (d *Discord) displayConnectedGuilds() {
+	fmt.Printf("\n============== Connected Servers ==============\n")
+	for _, guild := range d.client.State.Guilds {
+		// Fetch full guild data if name is empty
+		if guild.Name == "" {
+			fullGuild, err := d.client.Guild(guild.ID)
+			if err != nil {
+				guild.Name = "<error fetching>"
+			}
+			guild = fullGuild
+		}
+		fmt.Printf("- [%s] (ID: %s)\n", guild.Name, guild.ID)
+	}
+	fmt.Printf("===============================================\n\n")
+}
+
+// checkForGuildSetup checks if the guilds are properly set up in the database
+func (d *Discord) checkForGuildSetup() {
+	for _, guild := range d.client.State.Guilds {
+		if guild.Name == "" {
+			fullGuild, err := d.client.Guild(guild.ID)
+			if err != nil {
+				guild.Name = "<error fetching>"
+			}
+			guild = fullGuild
+		}
+
+		modRoles, err := d.db.GetModerationRolesByGuildId(guild.ID)
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch moderation roles for guild [%s]: %s", guild.Name, err)})
+			continue
+		}
+		if len(modRoles) == 0 {
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No moderation roles configured for guild [%s]", guild.Name)})
+		}
+
+		logChannels, err := d.db.GetLogChannelsByGuildId(guild.ID)
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch log channels for guild [%s]: %s", guild.Name, err)})
+			continue
+		}
+		if len(logChannels) == 0 {
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No log channels configured for guild [%s]", guild.Name)})
+		}
+
+		modChannels, err := d.db.GetModerationChannelsByGuildId(guild.ID)
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("Failed to fetch moderation channels for guild [%s]: %s", guild.Name, err)})
+			continue
+		}
+		if len(modChannels) == 0 {
+			d.log.LogWarning(logger.LogModel{Database: d.db, GuildID: guild.ID, Function: "checkForDatabaseSetup()", Message: fmt.Sprintf("No moderation channels configured for guild [%s]", guild.Name)})
+		}
+	}
 }
 
 func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string) {

@@ -16,22 +16,6 @@ type DiscordHandlerInterface interface {
 	RunDiscordBot()
 }
 
-func (d *Discord) displayConnectedGuilds() {
-	fmt.Printf("\n============== Connected Servers ==============\n")
-	for _, guild := range d.client.State.Guilds {
-		// Fetch full guild data if name is empty
-		if guild.Name == "" {
-			fullGuild, err := d.client.Guild(guild.ID)
-			if err != nil {
-				guild.Name = "<error fetching>"
-			}
-			guild = fullGuild
-		}
-		fmt.Printf("- [%s] (ID: %s)\n", guild.Name, guild.ID)
-	}
-	fmt.Printf("===============================================\n\n")
-}
-
 func (d *Discord) RunDiscordBot() {
 	// Set intents to receive message content
 	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
@@ -89,7 +73,8 @@ func (d *Discord) RunDiscordBot() {
 	// Initialize uptime tracking
 	utils.NewUptime()
 
-	// TODO : Check if the roles and channels are set for each guild, if not, log a warning
+	// Check if the moderation roles, log channels and moderation channels are set for each guild
+	d.checkForGuildSetup()
 
 	// keep bot running until there is an os interruption (ctrl+c or SIGTERM signal)
 	fmt.Printf("\n")
