@@ -64,11 +64,17 @@ func (d *Discord) RunDiscordBot() {
 		}
 	}(d.client) // close session, after function termination
 
+	// Initialize uptime tracking
+	utils.NewUptime()
+
 	// Display connected guilds
 	d.displayConnectedGuilds()
 
-	// Register slash commands
-	d.registerSlashCommands()
+	// Set max log retention for system and moderation logs
+	d.setMaxLogRetention()
+
+	// Check if the moderation roles, log channels and moderation channels are set for each guild
+	d.checkForGuildSetup()
 
 	// Initialize system stats
 	if err := utils.InitSystemStats(); err != nil {
@@ -77,14 +83,8 @@ func (d *Discord) RunDiscordBot() {
 		})
 	}
 
-	// Set max log retention for system and moderation logs
-	d.setMaxLogRetention()
-
-	// Initialize uptime tracking
-	utils.NewUptime()
-
-	// Check if the moderation roles, log channels and moderation channels are set for each guild
-	d.checkForGuildSetup()
+	// Register slash commands
+	// d.registerSlashCommands()
 
 	// keep bot running until there is an os interruption (ctrl+c or SIGTERM signal)
 	fmt.Printf("\n")
@@ -94,7 +94,7 @@ func (d *Discord) RunDiscordBot() {
 	<-c
 
 	// Clean up slash commands on exit
-	d.removeSlashCommands()
+	// d.removeSlashCommands()
 }
 
 func (d *Discord) registerSlashCommands() {
