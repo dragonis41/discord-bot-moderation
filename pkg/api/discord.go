@@ -84,7 +84,7 @@ func (d *Discord) RunDiscordBot() {
 	}
 
 	// Register slash commands
-	// d.registerSlashCommands()
+	d.registerSlashCommands()
 
 	// keep bot running until there is an os interruption (ctrl+c or SIGTERM signal)
 	fmt.Printf("\n")
@@ -94,7 +94,7 @@ func (d *Discord) RunDiscordBot() {
 	<-c
 
 	// Clean up slash commands on exit
-	// d.removeSlashCommands()
+	d.removeSlashCommands()
 }
 
 func (d *Discord) registerSlashCommands() {
