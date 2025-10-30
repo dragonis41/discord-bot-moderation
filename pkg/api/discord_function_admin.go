@@ -115,9 +115,19 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	last5Errors, err := d.db.GetSystemLogEntriesErrorsByGuildAndSystem(i.GuildID, 5)
 	if err == nil && len(last5Errors) > 0 {
 		errorMessages := ""
+		const maxLength = 950 // Leave some margin below 1024
+
 		for _, entry := range last5Errors {
-			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
+			logEntry := fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
+
+			// Check if adding this entry would exceed the limit
+			if len(errorMessages)+len(logEntry) > maxLength {
+				errorMessages += "\n... (logs truncated)"
+				break
+			}
+			errorMessages += logEntry
 		}
+
 		if errorMessages != "" {
 			fields = append(fields, &discordgo.MessageEmbedField{
 				Name:   "5 dernières erreurs",
