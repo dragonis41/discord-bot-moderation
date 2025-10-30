@@ -68,9 +68,15 @@ func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
 		return
 	}
 
-	d.checkMessageSpam(s, m)
-	d.checkBannedWords(s, m)
-	d.checkBannedWebsites(s, m)
+	if d.checkMessageSpam(s, m) {
+		return // Stop processing if spam detected
+	}
+	if d.checkBannedWords(s, m) {
+		return // Stop processing if banned word detected
+	}
+	if d.checkBannedWebsites(s, m) {
+		return // Stop processing if banned website detected
+	}
 }
 
 // checkBannedWords checks if the message contains any banned words
@@ -78,7 +84,7 @@ func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
 //	The check is case-insensitive and matches whole words / sentences.
 //	It supports both literal words and regex patterns.
 //	It also triggers if the word / sentence is surrounded by whitespace or punctuation.
-func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
+func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) bool {
 	// Check if banned words feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
@@ -88,11 +94,11 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 			Function: "checkBannedWords()",
 			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
 		})
-		return
+		return false
 	}
 
 	if !settings.BannedWordsEnabled {
-		return
+		return false
 	}
 
 	// Get banned words from database
@@ -104,12 +110,12 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 			Function: "checkBannedWords()",
 			Message:  fmt.Sprintf("Failed to fetch banned words from database: %s", err),
 		})
-		return
+		return false
 	}
 
 	// Skip if no banned words are configured
 	if len(bannedWords) == 0 {
-		return
+		return false
 	}
 
 	messageLower := strings.ToLower(m.Content)
@@ -170,10 +176,11 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
 
-			// Log the automoderation action
-			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
-			// Delete the message
-			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le mot `%s` est banni (violation %d/%d)", bannedWord.WordPattern, violationCount, d.cache.violationThreshold))
+			if violationCount < d.cache.violationThreshold {
+				// Log and delete the message
+				d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
+				d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le mot `%s` est banni (violation %d/%d)", bannedWord.WordPattern, violationCount, d.cache.violationThreshold))
+			}
 
 			// Check if threshold is reached
 			if violationCount >= d.cache.violationThreshold {
@@ -190,16 +197,18 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 					m.Author.Username, bannedWord.WordPattern, violationCount, d.cache.violationThreshold),
 			})
 
-			return
+			return true
 		}
 	}
+
+	return false
 }
 
 // checkBannedWebsites checks if the message contains any banned website URLs
 //
 //	The check extracts URLs from the message and compares them against the banned websites list.
 //	It matches if the URL contains the banned website pattern.
-func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message) {
+func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message) bool {
 	// Check if banned websites feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
@@ -209,11 +218,11 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 			Function: "checkBannedWebsites()",
 			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
 		})
-		return
+		return false
 	}
 
 	if !settings.BannedWebsitesEnabled {
-		return
+		return false
 	}
 
 	// Get banned websites from database
@@ -225,12 +234,12 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 			Function: "checkBannedWebsites()",
 			Message:  fmt.Sprintf("Failed to fetch banned websites from database: %s", err),
 		})
-		return
+		return false
 	}
 
 	// Skip if no banned websites are configured
 	if len(bannedWebsites) == 0 {
-		return
+		return false
 	}
 
 	// Regex pattern to extract URLs from message
@@ -240,7 +249,7 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 
 	// Skip if no URLs found in message
 	if len(urls) == 0 {
-		return
+		return false
 	}
 
 	messageLower := strings.ToLower(m.Content)
@@ -283,10 +292,11 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
 
-			// Log the automoderation action
-			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
-			// Delete the message
-			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le site `%s` est banni (violation %d/%d)", bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold))
+			if violationCount < d.cache.violationThreshold {
+				// Log and delete the message
+				d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
+				d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le site `%s` est banni (violation %d/%d)", bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold))
+			}
 
 			// Check if threshold is reached
 			if violationCount >= d.cache.violationThreshold {
@@ -303,13 +313,15 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 					m.Author.Username, bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold),
 			})
 
-			return
+			return true
 		}
 	}
+
+	return false
 }
 
 // checkMessageSpam detects if a user is sending the exact same message repeatedly (in a channel or across multiples channels)
-func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
+func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) bool {
 	// Check if spam detection feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
@@ -319,18 +331,18 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
 			Function: "checkMessageSpam()",
 			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
 		})
-		return
+		return false
 	}
 
 	if !settings.SpamDetectionEnabled {
-		return
+		return false
 	}
 
 	// Get recent messages from this user
 	recentMessages := d.cache.GetUserRecentMessages(m.GuildID, m.Author.ID, d.cache.GetMaxCacheSize())
 
 	if len(recentMessages) < d.cache.GetViolationThreshold() {
-		return
+		return false
 	}
 
 	// Count how many times this exact message appears within the violation window
@@ -349,9 +361,8 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
 
 	// If threshold is reached, ban the user
 	if duplicateCount >= d.cache.GetViolationThreshold() {
-		// Log the automoderation action
+		// Log and ban the user
 		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
-		// Take the ban action
 		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
 
 		d.log.LogSuccess(logger.LogModel{
@@ -360,5 +371,9 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) {
 			Function: "checkMessageSpam()",
 			Message:  fmt.Sprintf("Banned user %s for spam (%d duplicate messages)", m.Author.Username, duplicateCount),
 		})
+
+		return true
 	}
+
+	return false
 }
