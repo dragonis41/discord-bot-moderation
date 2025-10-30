@@ -142,11 +142,6 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
-			// Log the automoderation action
-			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_word_check", fmt.Sprintf("%d automod violations", violationCount))
-			// Delete the message
-			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Banned word detected: `%s` (violation %d/%d)", bannedWord.WordPattern, violationCount, d.cache.violationThreshold))
-
 			// Send a warning to the user
 			guildName := "<unknown>"
 			guild, err := d.client.Guild(m.GuildID)
@@ -175,6 +170,18 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
 
+			// Log the automoderation action
+			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
+			// Delete the message
+			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le mot `%s` est banni (violation %d/%d)", bannedWord.WordPattern, violationCount, d.cache.violationThreshold))
+
+			// Check if threshold is reached
+			if violationCount >= d.cache.violationThreshold {
+				// Ban the user
+				d.logAutomoderationAction(s, m, model.ActionBan, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
+				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le mot `%s` est banni\n%d automod violations", bannedWord.WordPattern, violationCount))
+			}
+
 			d.log.LogInfo(logger.LogModel{
 				Database: d.db,
 				GuildID:  m.GuildID,
@@ -182,13 +189,6 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) {
 				Message: fmt.Sprintf("Deleted message from %s containing banned word: [%s] (violation %d/%d)",
 					m.Author.Username, bannedWord.WordPattern, violationCount, d.cache.violationThreshold),
 			})
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				// Ban the user
-				d.logAutomoderationAction(s, m, model.ActionBan, "banned_word_check", fmt.Sprintf("%d automod violations", violationCount))
-				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%d automod violations", violationCount))
-			}
 
 			return
 		}
@@ -254,23 +254,6 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
-			// Log the automoderation action
-			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_website_check", fmt.Sprintf("%d automod violations", violationCount))
-			// Delete the message
-			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Banned website detected: `%s` (violation %d/%d)", bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold))
-
-			// Delete the message
-			err := s.ChannelMessageDelete(m.ChannelID, m.ID)
-			if err != nil {
-				d.log.LogError(logger.LogModel{
-					Database: d.db,
-					GuildID:  m.GuildID,
-					Function: "checkBannedWebsites()",
-					Message:  fmt.Sprintf("Failed to delete message: %s", err),
-				})
-				return
-			}
-
 			// Send a warning to the user
 			guildName := "<unknown>"
 			guild, err := d.client.Guild(m.GuildID)
@@ -300,6 +283,18 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
 			}
 
+			// Log the automoderation action
+			d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
+			// Delete the message
+			d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le site `%s` est banni (violation %d/%d)", bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold))
+
+			// Check if threshold is reached
+			if violationCount >= d.cache.violationThreshold {
+				// Ban the user
+				d.logAutomoderationAction(s, m, model.ActionBan, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
+				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le site `%s` est banni\n%d automod violations", bannedWebsite.WebsiteURL, violationCount))
+			}
+
 			d.log.LogInfo(logger.LogModel{
 				Database: d.db,
 				GuildID:  m.GuildID,
@@ -307,13 +302,6 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 				Message: fmt.Sprintf("Deleted message from %s containing banned website: [%s] (violation %d/%d)",
 					m.Author.Username, bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold),
 			})
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				// Ban the user
-				d.logAutomoderationAction(s, m, model.ActionBan, "banned_website_check", fmt.Sprintf("%d automod violations", violationCount))
-				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%d automod violations", violationCount))
-			}
 
 			return
 		}

@@ -209,11 +209,21 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 	errorMessages := "Aucun log trouvé."
 	if err == nil && len(last10Errors) > 0 {
 		errorMessages = ""
+		const maxLength = 950 // Leave some margin below 1024
+
 		for _, entry := range last10Errors {
-			errorMessages += "----------------------------------------\n"
-			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
+			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] `%s` : \n`%s`\n",
+				entry.CreatedAt, entry.Function, entry.Content)
+
+			// Check if adding this entry would exceed the limit
+			if len(errorMessages)+len(logEntry) > maxLength {
+				errorMessages += "\n... (logs truncated)"
+				break
+			}
+			errorMessages += logEntry
 		}
 	}
+
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "10 derniers logs",
 		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
@@ -296,11 +306,21 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 	last10Errors, err := d.db.GetModerationLogEntriesByGuild(i.GuildID, 10)
 	if err == nil && len(last10Errors) > 0 {
 		errorMessages = ""
+		const maxLength = 950 // Leave some margin below 1024
+
 		for _, entry := range last10Errors {
-			errorMessages += "----------------------------------------\n"
-			errorMessages += fmt.Sprintf("- [**%s**] Action : `%s` : \n`%s`\n", entry.CreatedAt, entry.Action, entry.Reason)
+			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] Action : `%s` : \n`%s`\n",
+				entry.CreatedAt, entry.Action, entry.Reason)
+
+			// Check if adding this entry would exceed the limit
+			if len(errorMessages)+len(logEntry) > maxLength {
+				errorMessages += "\n... (logs truncated)"
+				break
+			}
+			errorMessages += logEntry
 		}
 	}
+
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "10 derniers logs",
 		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
