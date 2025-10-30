@@ -181,10 +181,17 @@ func (d *Discord) buildSelectMenuOptions(
 
 	options := make([]discordgo.SelectMenuOption, len(items))
 	for i, item := range items {
+		description := item.GetDescription()
+
+		// Discord has a 100 character limit for option descriptions
+		if len(description) > 100 {
+			description = description[:97] + "..."
+		}
+
 		option := discordgo.SelectMenuOption{
 			Label:       item.GetName(),
 			Value:       item.GetID(),
-			Description: item.GetDescription(),
+			Description: description,
 			Default:     selectedMap[item.GetID()],
 		}
 

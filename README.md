@@ -13,8 +13,9 @@ A Discord bot to auto moderate a server because nobody want spams
 
 # Usage
 1. When the bot is added to a server, it will automatically start moderating messages based on predefined rules.
-2. You also need to use the `/set-log-channel` command to specify which channel the bot should use to log moderation actions.
-3. You need to use the `/set-moderation-channels` command to specify which channels the bot should monitor for moderation.
+2. You need to use the `/set-log-channel` command to specify which channel the bot should use to log moderation actions.
+3. You also need to use the `/set-moderation-channels` command to specify which channels the bot should monitor for moderation.
 4. And the `/set-moderation-roles` command to specify which role has permission to manage the bot settings and be notified of moderation actions.
+5. Then, set up your server to give access to all channels for the bot and give the bot the necessary permissions. (manage messages, kick, ban)
 
 // TODO : Replace this with `/setup` command that does all the setup in one go.
