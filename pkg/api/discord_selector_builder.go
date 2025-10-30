@@ -513,6 +513,22 @@ func (m *ModChannelDB) Add(guildID, itemID string) error {
 	return m.db.AddModerationChannel(guildID, itemID)
 }
 
+type ExcludedChannelDB struct {
+	db *database.Database
+}
+
+func (m *ExcludedChannelDB) GetSelected(guildID string) ([]string, error) {
+	return m.db.GetExcludedChannelsByGuildId(guildID)
+}
+
+func (m *ExcludedChannelDB) RemoveByGuild(guildID string) error {
+	return m.db.RemoveExcludedChannelsByGuild(guildID)
+}
+
+func (m *ExcludedChannelDB) Add(guildID, itemID string) error {
+	return m.db.AddExcludedChannel(guildID, itemID)
+}
+
 type ModRoleDB struct {
 	db *database.Database
 }

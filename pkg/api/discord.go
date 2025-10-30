@@ -38,14 +38,15 @@ func (d *Discord) RunDiscordBot() {
 	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	// add an event handler for slash commands
-	d.client.AddHandler(d.slashCommandHandler)          // Handler for slash commands
-	d.client.AddHandler(d.handleLogChannelSelection)    // Handler for message component interaction for log channel selection
-	d.client.AddHandler(d.handleModChannelSelection)    // Handler for message component interaction for moderation channel selection
-	d.client.AddHandler(d.handleModRoleSelection)       // Handler for message component interaction for role selection
-	d.client.AddHandler(d.handleAutomoderationSettings) // Handler for automoderation settings selection
-	d.client.AddHandler(d.messageCreateHandler)         // Handler for message creation events
-	d.client.AddHandler(d.messageUpdateHandler)         // Handler for message update events
-	d.client.AddHandler(d.handleReportActions)          // Handler for report action buttons (kick/ban)
+	d.client.AddHandler(d.slashCommandHandler)            // Handler for slash commands
+	d.client.AddHandler(d.handleLogChannelSelection)      // Handler for message component interaction for log channel selection
+	d.client.AddHandler(d.handleModChannelSelection)      // Handler for message component interaction for moderation channel selection
+	d.client.AddHandler(d.handleExcludedChannelSelection) // Handler for message component interaction for excluded channel selection
+	d.client.AddHandler(d.handleModRoleSelection)         // Handler for message component interaction for role selection
+	d.client.AddHandler(d.handleAutomoderationSettings)   // Handler for automoderation settings selection
+	d.client.AddHandler(d.messageCreateHandler)           // Handler for message creation events
+	d.client.AddHandler(d.messageUpdateHandler)           // Handler for message update events
+	d.client.AddHandler(d.handleReportActions)            // Handler for report action buttons (kick/ban)
 
 	// open session
 	err := d.client.Open()
@@ -136,6 +137,10 @@ func (d *Discord) registerSlashCommands() {
 		{
 			Name:        "set-moderation-channels",
 			Description: "Sélectionne les canaux où les signalements seront envoyés",
+		},
+		{
+			Name:        "set-excluded-channels",
+			Description: "Sélectionne les canaux exclus de l'automodération",
 		},
 		{
 			Name:        "set-moderation-roles",
@@ -247,6 +252,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.selectLogChannels(s, i)
 	case "set-moderation-channels":
 		d.selectModeratorChannels(s, i)
+	case "set-excluded-channels":
+		d.selectExcludedChannels(s, i)
 	case "set-moderation-roles":
 		d.selectModeratorRoles(s, i)
 	case "add-banned-word":

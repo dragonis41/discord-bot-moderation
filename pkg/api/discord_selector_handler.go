@@ -77,6 +77,38 @@ func (d *Discord) handleModChannelSelection(s *discordgo.Session, i *discordgo.I
 	d.handleSelection(s, i, config, dbOps, d.getTextChannelsAsItems, formatDoneMessage)
 }
 
+func (d *Discord) getExcludedChannelConfig() (SelectionConfig, DatabaseOperations) {
+	config := SelectionConfig{
+		Prefix:          "excluded_channel",
+		ItemsPerPage:    channelsPerPage,
+		Title:           "Sélection des salons exclus",
+		Description:     "Sélectionnez les salons exclus puis cliquez sur \"Terminer\".\nCe sont les salons qui ne seront pas pris en compte dans l'automodération.",
+		Placeholder:     "Sélectionnez les salons exclus",
+		DoneDescription: "⚠️ Aucun salon sélectionné",
+		EmojiName:       "💬",
+	}
+	return config, &ExcludedChannelDB{db: d.db}
+}
+
+func (d *Discord) handleExcludedChannelSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	formatDoneMessage := func(items []SelectionItem) string {
+		// Sort channels by position
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].(ChannelItem).Position < items[j].(ChannelItem).Position
+		})
+
+		var channelNames []string
+		for _, item := range items {
+			channelNames = append(channelNames, fmt.Sprintf("- <#%s>", item.GetID()))
+		}
+
+		return "✅ Salons exclus sélectionnés :\n" + strings.Join(channelNames, "\n")
+	}
+
+	config, dbOps := d.getExcludedChannelConfig()
+	d.handleSelection(s, i, config, dbOps, d.getTextChannelsAsItems, formatDoneMessage)
+}
+
 func (d *Discord) getModRoleConfig() (SelectionConfig, DatabaseOperations) {
 	config := SelectionConfig{
 		Prefix:          "mod_role",
