@@ -206,17 +206,19 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	var fields []*discordgo.MessageEmbedField
 	last10Errors, err := d.db.GetSystemLogEntriesByGuild(i.GuildID, 10)
+	errorMessages := "Aucun log trouvé."
 	if err == nil && len(last10Errors) > 0 {
-		errorMessages := ""
+		errorMessages = ""
 		for _, entry := range last10Errors {
+			errorMessages += "----------------------------------------\n"
 			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "10 derniers logs",
-			Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
-			Inline: false,
-		})
 	}
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "10 derniers logs",
+		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
+		Inline: false,
+	})
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
@@ -290,18 +292,20 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	var fields []*discordgo.MessageEmbedField
+	errorMessages := "Aucun log de modération trouvé."
 	last10Errors, err := d.db.GetModerationLogEntriesByGuild(i.GuildID, 10)
 	if err == nil && len(last10Errors) > 0 {
-		errorMessages := ""
+		errorMessages = ""
 		for _, entry := range last10Errors {
-			errorMessages += fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Action, entry.Reason)
+			errorMessages += "----------------------------------------\n"
+			errorMessages += fmt.Sprintf("- [**%s**] Action : `%s` : \n`%s`\n", entry.CreatedAt, entry.Action, entry.Reason)
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "10 derniers logs",
-			Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
-			Inline: false,
-		})
 	}
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "10 derniers logs",
+		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
+		Inline: false,
+	})
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{

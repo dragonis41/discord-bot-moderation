@@ -71,7 +71,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 
 	// Log the report in the database
-	err = d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.ID, reason))
+	err = d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.Username, reason))
 	if err != nil {
 		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "reportUser()",
 			Message: fmt.Sprintf("Error logging report to database: %s", err),

@@ -18,10 +18,11 @@ func (l SystemLogType) String() string {
 type ModerationLogAction string
 
 const (
-	ActionReport ModerationLogAction = "REPORT"
-	ActionWarn   ModerationLogAction = "WARN"
-	ActionKick   ModerationLogAction = "KICK"
-	ActionBan    ModerationLogAction = "BAN"
+	ActionDeleteMessage ModerationLogAction = "DELETE_MESSAGE"
+	ActionReport        ModerationLogAction = "REPORT"
+	ActionWarn          ModerationLogAction = "WARN"
+	ActionKick          ModerationLogAction = "KICK"
+	ActionBan           ModerationLogAction = "BAN"
 )
 
 func (l ModerationLogAction) String() string {

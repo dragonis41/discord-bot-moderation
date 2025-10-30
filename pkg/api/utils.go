@@ -277,6 +277,18 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 
 func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string) {
 	switch action {
+	case model.ActionDeleteMessage:
+		// Delete the message
+		err := s.ChannelMessageDelete(m.ChannelID, m.ID)
+		if err != nil {
+			d.log.LogError(logger.LogModel{
+				Database: d.db,
+				GuildID:  m.GuildID,
+				Function: "checkBannedWords()",
+				Message:  fmt.Sprintf("Failed to delete message: %s", err),
+			})
+			return
+		}
 	case model.ActionWarn:
 		// Send a private warning message to the user
 		d.sendPrivateMessage(s, m, reason)
