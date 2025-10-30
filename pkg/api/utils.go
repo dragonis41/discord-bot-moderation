@@ -259,7 +259,7 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 		"**Utilisateur**: <@%s> (ID: %s)\n"+
 			"**Action**: `%s`\n"+
 			"**Triggered rule**: `%s`\n"+
-			"**Raison**: `%s`\n\n"+
+			"**Raison**: %s\n\n"+
 			"**Messages récents**: \n%s",
 		m.Author.ID, m.Author.ID, action, trigger, reason, recentMessages,
 	)
