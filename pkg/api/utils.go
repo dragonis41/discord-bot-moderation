@@ -192,6 +192,29 @@ func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message,
 	}
 }
 
+func (d *Discord) sendPrivateMessageOnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, user *discordgo.User, message string) {
+	channel, err := s.UserChannelCreate(user.ID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "sendPrivateMessageOnInteraction()",
+			Message:  fmt.Sprintf("Failed to create DM channel: %s", err),
+		})
+		return
+	}
+
+	_, err = s.ChannelMessageSend(channel.ID, message)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "sendPrivateMessageOnInteraction()",
+			Message:  fmt.Sprintf("Failed to send DM: %s", err),
+		})
+	}
+}
+
 func (d *Discord) sendLogChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
 	logChannels, err := d.db.GetLogChannelsByGuildId(guildID)
 	if err != nil {
@@ -276,6 +299,17 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 }
 
 func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string) {
+	guild, err := s.Guild(m.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  m.GuildID,
+			Function: "takeAutomoderationAction()",
+			Message:  fmt.Sprintf("Failed to fetch guild info: %s", err),
+		})
+		guild.Name = "<unknown>"
+	}
+
 	switch action {
 	case model.ActionDeleteMessage:
 		// Delete the message
@@ -294,17 +328,7 @@ func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Me
 		d.sendPrivateMessage(s, m, reason)
 		return
 	case model.ActionKick:
-		guild, err := s.Guild(m.GuildID)
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "takeAutomoderationAction()",
-				Message:  fmt.Sprintf("Failed to fetch guild info for kick message: %s", err),
-			})
-			guild.Name = "<unknown>"
-		}
-		message := fmt.Sprintf("Vous avez été expulsé du serveur [%s] pour la raison suivante : %s", guild.Name, reason)
+		message := fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] pour la raison suivante : \n*%s*", guild.Name, reason)
 		d.sendPrivateMessage(s, m, message)
 		// Kick user
 		err = s.GuildMemberDeleteWithReason(m.GuildID, m.Author.ID, reason)
@@ -318,17 +342,7 @@ func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Me
 			return
 		}
 	case model.ActionBan:
-		guild, err := s.Guild(m.GuildID)
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "takeAutomoderationAction()",
-				Message:  fmt.Sprintf("Failed to fetch guild info for ban message: %s", err),
-			})
-			guild.Name = "<unknown>"
-		}
-		message := fmt.Sprintf("Vous avez été banni du serveur [%s] pour la raison suivante : %s", guild.Name, reason)
+		message := fmt.Sprintf("🔨 **Bannissement**\n\nVous avez été banni du serveur [%s] pour la raison suivante : \n*%s*", guild.Name, reason)
 		d.sendPrivateMessage(s, m, message)
 		// Permanent ban with message deletion
 		err = s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, reason, 1)

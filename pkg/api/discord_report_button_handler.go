@@ -118,6 +118,17 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		return
 	}
 
+	guild, err := s.Guild(i.GuildID)
+	if err != nil {
+		d.log.LogError(logger.LogModel{
+			Database: d.db,
+			GuildID:  i.GuildID,
+			Function: "handleReportActions()",
+			Message:  fmt.Sprintf("Error fetching guild: %s", err),
+		})
+		guild.Name = "<Unknown>"
+	}
+
 	// Perform the action
 	var actionErr error
 	var successMessage string
@@ -125,16 +136,17 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 
 	switch action {
 	case "kick":
-		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04")))
+		reason := fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] pour la raison suivante : \n`%s`", guild.Name, reason))
+		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, reason)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été expulsé du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", i.Member.User.Username, ReportedUser.Username)
 	case "ban":
-		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, fmt.Sprintf("Banni le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04")), 1)
+		reason := fmt.Sprintf("Banni le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] pour la raison suivante : \n`%s`", guild.Name, reason))
+		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, reason, 1)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été banni du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", i.Member.User.Username, ReportedUser.Username)
-	case "ignore":
-		successMessage = fmt.Sprintf("✅ Le signalement de l'utilisateur **%s** a été ignoré.", ReportedUser.Username)
-		logMessage = fmt.Sprintf("User [%s] ignored report for user [%s]", i.Member.User.Username, ReportedUser.Username)
 	default:
 		successMessage = fmt.Sprintf("✅ Le signalement de l'utilisateur **%s** a été ignoré.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] ignored report for user [%s]", i.Member.User.Username, ReportedUser.Username)
