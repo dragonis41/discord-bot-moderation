@@ -9,7 +9,7 @@ A Discord bot to auto moderate a server because nobody want spams
 5. Enable "Presence Intent", "Server Members Intent", and "Message Content Intent" under the "Privileged Gateway Intents" section.
 6. Copy the ID of your application from the "General Information" tab.
 7. Go to the following URL in your browser, replacing `YOUR_CLIENT_ID` with your application's client ID:
-   ```https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=274877926400&scope=bot%20applications.commands```
+   ```https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=1494648744966&scope=bot%20applications.commands```
 
 # Usage
 1. When the bot is added to a server, it will automatically start moderating messages based on predefined rules.

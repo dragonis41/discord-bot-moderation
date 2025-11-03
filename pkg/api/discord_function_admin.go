@@ -319,8 +319,8 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		const maxLength = 950 // Leave some margin below 1024
 
 		for _, entry := range last10Errors {
-			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] Action : `%s` : \n`%s`\n",
-				entry.CreatedAt, entry.Action, entry.Reason)
+			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] Action : `%s` <@%s> (ID: %s) : \n`%s`\n",
+				entry.CreatedAt, entry.Action, entry.UserID, entry.UserID, entry.Reason)
 
 			// Check if adding this entry would exceed the limit
 			if len(errorMessages)+len(logEntry) > maxLength {
