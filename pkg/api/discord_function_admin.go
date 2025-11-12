@@ -258,9 +258,6 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Message History", Color: model.Green.Int(), Description: fmt.Sprintf("Voici les %d derniers messages en cache :", limit), Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
-		},
 		Files: []*discordgo.File{
 			{
 				Name:        "message_history.txt",

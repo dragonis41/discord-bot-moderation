@@ -320,7 +320,7 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 	return false
 }
 
-// checkMessageSpam detects if a user is sending the exact same message repeatedly (in a channel or across multiples channels)
+// checkMessageSpam detects if a user is sending the exact same message repeatedly across multiple channels
 func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) bool {
 	// Check if spam detection feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
@@ -345,8 +345,9 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 		return false
 	}
 
-	// Count how many times this exact message appears within the violation window
+	// Count how many times this exact message appears within the violation window and track which channels they were sent to
 	duplicateCount := 0
+	channelsUsed := make(map[string]bool)
 	now := time.Now()
 
 	for _, msg := range recentMessages {
@@ -355,21 +356,24 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 			// Exact match comparison
 			if msg.Content == m.Content && msg.AttachmentCount == len(m.Attachments) {
 				duplicateCount++
+				channelsUsed[msg.ChannelID] = true
 			}
 		}
 	}
 
-	// If threshold is reached, ban the user
-	if duplicateCount >= d.cache.GetViolationThreshold() {
+	// Only consider it spam if:
+	// 1. The threshold is reached
+	// 2. The messages were sent across multiple channels (more than x unique channel)
+	if duplicateCount >= d.cache.GetViolationThreshold() && len(channelsUsed) >= d.cache.GetViolationThreshold() {
 		// Log and ban the user
-		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
-		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois en %s)", duplicateCount, d.cache.GetViolationWindow()))
+		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
+		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
 
 		d.log.LogSuccess(logger.LogModel{
 			Database: d.db,
 			GuildID:  m.GuildID,
 			Function: "checkMessageSpam()",
-			Message:  fmt.Sprintf("Banned user %s for spam (%d duplicate messages)", m.Author.Username, duplicateCount),
+			Message:  fmt.Sprintf("Banned user %s for cross-channel spam (%d duplicate messages across %d channels)", m.Author.Username, duplicateCount, len(channelsUsed)),
 		})
 
 		return true
