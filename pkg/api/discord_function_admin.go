@@ -223,35 +223,29 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	// Format the messages and send them as an attachment
 	messageContent := fmt.Sprintf("Derniers %d messages en cache :\n\n", limit)
 	for _, msg := range historyMessages {
-		var user *discordgo.User
-		member, err := s.State.Member(i.GuildID, msg.AuthorID)
-		if err != nil {
-			// Fallback to API call
-			member, err = s.GuildMember(i.GuildID, msg.AuthorID)
-			if err != nil {
-				user = &discordgo.User{Username: "<Unknown User>"}
-			} else {
-				user = member.User
-			}
-		} else {
-			user = member.User
+		// Use cached username
+		username := msg.AuthorUsername
+		if username == "" {
+			username = "<Unknown User>"
 		}
+
+		// Only make API call for channel if needed
+		channelName := "<Unknown Channel>"
 		channel, err := s.State.Channel(msg.ChannelID)
-		if err != nil {
-			channel, err = s.Channel(msg.ChannelID)
-			if err != nil {
-				channel = &discordgo.Channel{Name: "<Unknown Channel>"}
-			}
+		if err == nil {
+			channelName = channel.Name
 		}
+
 		attachments := "<No Attachments>"
 		if msg.AttachmentCount > 0 {
 			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
 		}
+
 		messageContent += fmt.Sprintf("----------------------------------------\n[%s] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s\n",
 			msg.Timestamp.Format(time.DateTime),
-			user.Username,
+			username,
 			msg.AuthorID,
-			channel.Name,
+			channelName,
 			msg.Content,
 			attachments,
 		)

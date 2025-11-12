@@ -14,6 +14,7 @@ type MessageCache struct {
 	MessageID       string
 	Content         string
 	AuthorID        string
+	AuthorUsername  string
 	Timestamp       time.Time
 	AttachmentCount int
 	HasEmbeds       bool
@@ -104,6 +105,7 @@ func (c *Cache) AddMessage(m *discordgo.MessageCreate) {
 		MessageID:       m.ID,
 		Content:         m.Content,
 		AuthorID:        m.Author.ID,
+		AuthorUsername:  m.Author.Username,
 		Timestamp:       time.Now(),
 		AttachmentCount: len(m.Attachments),
 		HasEmbeds:       len(m.Embeds) > 0,
