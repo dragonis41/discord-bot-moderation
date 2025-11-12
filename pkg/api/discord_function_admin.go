@@ -229,11 +229,12 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			username = "<Unknown User>"
 		}
 
-		// Only make API call for channel if needed
-		channelName := "<Unknown Channel>"
 		channel, err := s.State.Channel(msg.ChannelID)
-		if err == nil {
-			channelName = channel.Name
+		if err != nil {
+			channel, err = s.Channel(msg.ChannelID)
+			if err != nil {
+				channel = &discordgo.Channel{Name: "<Unknown Channel>"}
+			}
 		}
 
 		attachments := "<No Attachments>"
@@ -245,7 +246,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			msg.Timestamp.Format(time.DateTime),
 			username,
 			msg.AuthorID,
-			channelName,
+			channel.Name,
 			msg.Content,
 			attachments,
 		)
