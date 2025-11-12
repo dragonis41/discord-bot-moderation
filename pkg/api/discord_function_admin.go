@@ -247,11 +247,11 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		if msg.AttachmentCount > 0 {
 			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
 		}
-		messageContent += fmt.Sprintf("----------------------------------------\n[%s] in #%s\n%s (ID: %s) : %s\n%s\n",
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s\n",
 			msg.Timestamp.Format(time.DateTime),
-			channel.Name,
 			user.Username,
 			msg.AuthorID,
+			channel.Name,
 			msg.Content,
 			attachments,
 		)
