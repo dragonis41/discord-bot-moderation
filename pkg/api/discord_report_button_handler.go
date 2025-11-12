@@ -111,7 +111,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 					Title:       "Erreur",
 					Description: "Impossible de récupérer les informations de l'utilisateur.",
 					Color:       model.Red.Int(),
-					Timestamp:   time.Now().Format(time.RFC3339),
+					Timestamp:   time.Now().Format(time.DateTime),
 				},
 			},
 		})
@@ -165,7 +165,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 					Title:       "Erreur",
 					Description: fmt.Sprintf("Impossible d'effectuer l'action. Vérifiez que le bot a les permissions nécessaires et que l'utilisateur est toujours sur le serveur."),
 					Color:       model.Red.Int(),
-					Timestamp:   time.Now().Format(time.RFC3339),
+					Timestamp:   time.Now().Format(time.DateTime),
 				},
 			},
 		})
@@ -186,7 +186,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 				Title:       "Action effectuée",
 				Description: successMessage,
 				Color:       model.Green.Int(),
-				Timestamp:   time.Now().Format(time.RFC3339),
+				Timestamp:   time.Now().Format(time.DateTime),
 			},
 		},
 	})

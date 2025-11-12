@@ -217,6 +217,24 @@ func (c *Cache) GetUserRecentMessages(guildID, userID string, limit int) []Messa
 	return userMessages
 }
 
+func (c *Cache) GetGuildRecentMessages(guildID string, limit int) []MessageCache {
+	c.messageCacheMu.RLock()
+	defer c.messageCacheMu.RUnlock()
+
+	cache, exists := c.messageCache[guildID]
+	if !exists {
+		return nil
+	}
+
+	var recentMessages []MessageCache
+	// Iterate backwards to get most recent first
+	for i := len(cache) - 1; i >= 0 && len(recentMessages) < limit; i-- {
+		recentMessages = append(recentMessages, cache[i])
+	}
+
+	return recentMessages
+}
+
 // ResetViolations resets violations for a specific user in a guild
 func (c *Cache) ResetViolations(guildID, userID string) {
 	c.userViolationsMu.Lock()

@@ -162,7 +162,7 @@ func (d *Discord) buildSelectMessage(
 		Description: description,
 		Color:       model.Blue.Int(),
 		Footer:      model.SelectionMenuFooter,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().Format(time.DateTime),
 	}
 
 	return embed, components
@@ -442,7 +442,7 @@ func (d *Discord) handleSelectionDone(
 			Title:       "Configuration terminée",
 			Description: description,
 			Color:       model.Green.Int(),
-			Timestamp:   time.Now().Format(time.RFC3339),
+			Timestamp:   time.Now().Format(time.DateTime),
 		}},
 		Components: &[]discordgo.MessageComponent{},
 	})
@@ -604,7 +604,7 @@ func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interactio
 			Title:       title,
 			Description: description,
 			Color:       model.Red.Int(),
-			Timestamp:   time.Now().Format(time.RFC3339),
+			Timestamp:   time.Now().Format(time.DateTime),
 		}},
 	})
 }

@@ -35,7 +35,7 @@ type DiscordHandlerInterface interface {
 
 func (d *Discord) RunDiscordBot() {
 	// Set intents to receive message content
-	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
+	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentGuildMembers | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	// add an event handler for slash commands
 	d.client.AddHandler(d.slashCommandHandler)            // Handler for slash commands
@@ -99,6 +99,8 @@ func (d *Discord) RunDiscordBot() {
 }
 
 func (d *Discord) registerSlashCommands() {
+	var minValue float64 = 1
+	var maxValue float64 = 100
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "report",
@@ -121,6 +123,20 @@ func (d *Discord) registerSlashCommands() {
 		{
 			Name:        "status",
 			Description: "Affiche le statut du bot",
+		},
+		{
+			Name:        "get-message-history",
+			Description: "Affiche l'historique des messages en cache de la guild",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "limit",
+					Description: "Le nombre de messages à récupérer (par défaut 10, maximum 100)",
+					MinValue:    &minValue,
+					MaxValue:    maxValue,
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "get-bot-logs",
@@ -244,6 +260,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.reportUser(s, i)
 	case "status":
 		d.showStatus(s, i)
+	case "get-message-history":
+		d.getMessageHistory(s, i)
 	case "get-bot-logs":
 		d.getBotLogs(s, i)
 	case "get-moderation-logs":

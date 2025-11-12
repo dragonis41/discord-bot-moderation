@@ -291,7 +291,7 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 		Title:       "🚨 Action d'automodération déclenchée",
 		Description: description,
 		Color:       model.Violet.Int(),
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().Format(time.DateTime),
 	}
 
 	// Send alert to all log channels

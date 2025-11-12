@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
+	getMessageHistory(s *discordgo.Session, i *discordgo.InteractionCreate)
 	getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
 	getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
@@ -144,12 +146,131 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 				Color:     model.Green.Int(),
 				Fields:    fields,
 				Footer:    model.DefaultFooter,
-				Timestamp: time.Now().Format(time.RFC3339),
+				Timestamp: time.Now().Format(time.DateTime),
 			},
 		},
 	})
 	if err != nil {
 		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
+			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
+		})
+	}
+}
+
+func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer the response
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
+			Message: fmt.Sprintf("Error deferring response: %s", err),
+		})
+		return
+	}
+
+	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
+		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
+	})
+
+	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	var limit = 10
+	// Parse options
+	for _, option := range options {
+		switch option.Name {
+		case "limit":
+			limit = int(option.IntValue())
+		}
+	}
+	if limit <= 0 || limit > 100 {
+		// Send error message
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Message History", Color: model.Red.Int(), Description: "La limite doit être comprise entre 1 et 100.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	// Get the message history from the cache
+	historyMessages := d.cache.GetGuildRecentMessages(i.GuildID, limit)
+	if len(historyMessages) == 0 {
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{
+				{Title: "Message History", Color: model.Red.Int(), Description: "Aucun message en cache pour ce serveur.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+			},
+		})
+		if err != nil {
+			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
+				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
+			})
+		}
+		return
+	}
+
+	// Format the messages and send them as an attachment
+	messageContent := fmt.Sprintf("Derniers %d messages en cache :\n\n", limit)
+	for _, msg := range historyMessages {
+		var user *discordgo.User
+		member, err := s.State.Member(i.GuildID, msg.AuthorID)
+		if err != nil {
+			// Fallback to API call
+			member, err = s.GuildMember(i.GuildID, msg.AuthorID)
+			if err != nil {
+				user = &discordgo.User{Username: "<Unknown User>"}
+			} else {
+				user = member.User
+			}
+		} else {
+			user = member.User
+		}
+		channel, err := s.State.Channel(msg.ChannelID)
+		if err != nil {
+			channel, err = s.Channel(msg.ChannelID)
+			if err != nil {
+				channel = &discordgo.Channel{Name: "<Unknown Channel>"}
+			}
+		}
+		attachments := "<No Attachments>"
+		if msg.AttachmentCount > 0 {
+			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
+		}
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s] in #%s\n%s (ID: %s) : %s\n%s\n",
+			msg.Timestamp.Format(time.DateTime),
+			channel.Name,
+			user.Username,
+			msg.AuthorID,
+			msg.Content,
+			attachments,
+		)
+	}
+
+	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{
+			{Title: "Message History", Color: model.Green.Int(), Description: fmt.Sprintf("Voici les %d derniers messages en cache :", limit), Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+		},
+		Files: []*discordgo.File{
+			{
+				Name:        "message_history.txt",
+				ContentType: "text/plain",
+				Reader:      bytes.NewReader([]byte(messageContent)),
+			},
+		},
+	})
+	if err != nil {
+		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
 			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
 		})
 	}
@@ -185,7 +306,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 			},
 		})
 		if err != nil {
@@ -203,7 +324,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 			},
 		})
 		if err != nil {
@@ -242,7 +363,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 		},
 	})
 	if err != nil {
@@ -282,7 +403,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 			},
 		})
 		if err != nil {
@@ -300,7 +421,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 			},
 		})
 		if err != nil {
@@ -339,7 +460,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.RFC3339)},
+			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
 		},
 	})
 	if err != nil {
