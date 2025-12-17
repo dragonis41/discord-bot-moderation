@@ -128,10 +128,10 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 		// - punctuation
 		if bannedWord.IsRegex {
 			// If IsRegex is true, treat the word pattern as a regex
-			pattern = fmt.Sprintf(`(?i)(^|[\s\p{P}])(%s)($|[\s\p{P}])`, bannedWord.WordPattern)
+			pattern = fmt.Sprintf(`(?i)(^|[\p{Z}\p{Cf}\p{P}])(%s)($|[\p{Z}\p{Cf}\p{P}])`, bannedWord.WordPattern)
 		} else {
 			// Otherwise, escape the word to treat it as a literal string
-			pattern = fmt.Sprintf(`(?i)(^|[\s\p{P}])%s($|[\s\p{P}])`, regexp.QuoteMeta(bannedWord.WordPattern))
+			pattern = fmt.Sprintf(`(?i)(^|[\p{Z}\p{Cf}\p{P}])%s($|[\p{Z}\p{Cf}\p{P}])`, regexp.QuoteMeta(bannedWord.WordPattern))
 		}
 		matched, err := regexp.MatchString(pattern, messageLower)
 		if err != nil {
