@@ -133,7 +133,7 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 			// Otherwise, escape the word to treat it as a literal string
 			word = regexp.QuoteMeta(bannedWord.WordPattern)
 		}
-		pattern = fmt.Sprintf(`(?i)(?:^|[\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\p{Z}\p{Cf}\p{P}])`, word)
+		pattern = fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
 		matched, err := regexp.MatchString(pattern, messageLower)
 		if err != nil {
 			d.log.LogError(logger.LogModel{
