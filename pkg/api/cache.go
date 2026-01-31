@@ -48,6 +48,13 @@ type Cache struct {
 	// userViolationsMu protects concurrent access to userViolations
 	userViolationsMu sync.RWMutex
 
+	// pendingBans tracks users who are currently being banned to prevent duplicate actions
+	// Key: "guildID:userID", Value: timestamp when ban was initiated
+	pendingBans map[string]time.Time
+
+	// pendingBansMu protects concurrent access to pendingBans
+	pendingBansMu sync.RWMutex
+
 	// maxCacheSize defines the maximum number of messages to store per guild
 	maxCacheSize int
 
@@ -64,6 +71,7 @@ func NewCache(maxCacheSize, violationThreshold int, violationWindow time.Duratio
 		messageCache:       make(map[string][]MessageCache),
 		messageCacheIndex:  make(map[string]map[string]int),
 		userViolations:     make(map[string]*UserViolation),
+		pendingBans:        make(map[string]time.Time),
 		maxCacheSize:       maxCacheSize,
 		violationThreshold: violationThreshold,
 		violationWindow:    violationWindow,
@@ -263,4 +271,47 @@ func (c *Cache) GetViolationCount(guildID, userID string) int {
 	}
 
 	return violation.ViolationCount
+}
+
+// MarkUserAsPendingBan marks a user as having a pending ban to prevent duplicate actions
+// Returns true if the user was not already pending, false if already pending
+func (c *Cache) MarkUserAsPendingBan(guildID, userID string) bool {
+	c.pendingBansMu.Lock()
+	defer c.pendingBansMu.Unlock()
+
+	key := guildID + ":" + userID
+
+	// Check if already pending (within last 60 seconds)
+	if pendingTime, exists := c.pendingBans[key]; exists {
+		if time.Since(pendingTime) < 60*time.Second {
+			return false // Already pending
+		}
+	}
+
+	c.pendingBans[key] = time.Now()
+	return true
+}
+
+// IsUserPendingBan checks if a user has a pending ban action
+func (c *Cache) IsUserPendingBan(guildID, userID string) bool {
+	c.pendingBansMu.RLock()
+	defer c.pendingBansMu.RUnlock()
+
+	key := guildID + ":" + userID
+	pendingTime, exists := c.pendingBans[key]
+	if !exists {
+		return false
+	}
+
+	// Consider pending for 60 seconds after marking
+	return time.Since(pendingTime) < 60*time.Second
+}
+
+// ClearPendingBan removes a user from the pending ban list
+func (c *Cache) ClearPendingBan(guildID, userID string) {
+	c.pendingBansMu.Lock()
+	defer c.pendingBansMu.Unlock()
+
+	key := guildID + ":" + userID
+	delete(c.pendingBans, key)
 }

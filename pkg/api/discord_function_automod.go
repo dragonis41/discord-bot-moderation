@@ -17,8 +17,16 @@ import (
 //	It ignores messages from bots and itself, as well as private messages (DMs).
 //	It adds the message to cache and calls the common moderation function.
 func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Ignore if Author is nil
+	if m == nil || s == nil || m.Author == nil || m.Member == nil || s.State == nil {
+		return
+	}
 	// Ignore messages from bots and itself
-	if m.Author != nil && m.Author.Bot || m.Author.ID == s.State.User.ID {
+	if m.Author.Bot || m.Author.ID == s.State.User.ID {
+		return
+	}
+	// Ignore webhook messages
+	if m.WebhookID != "" {
 		return
 	}
 	// Ignore if this is a private message (DM)
@@ -37,12 +45,26 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 //	It ignores messages from bots and itself, as well as private messages (DMs).
 //	It updates the message in cache and calls the common moderation function.
 func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.MessageUpdate) {
+	// Ignore if Author is nil (can happen with some message update events)
+	// Also check if Message is nil - update events can have incomplete data
+	if m == nil || s == nil || m.Message == nil || m.Author == nil || m.Member == nil || s.State == nil {
+		return
+	}
 	// Ignore messages from bots and itself
-	if m.Author != nil && m.Author.Bot || m.Author.ID == s.State.User.ID {
+	if m.Author.Bot || m.Author.ID == s.State.User.ID {
+		return
+	}
+	// Ignore webhook messages (webhooks like news bots can trigger update events)
+	if m.WebhookID != "" {
 		return
 	}
 	// Ignore if this is a private message (DM)
 	if m.GuildID == "" {
+		return
+	}
+	// Ignore update events that don't contain actual content (e.g., embed updates, reactions)
+	// These events fire when Discord loads link previews or other metadata changes
+	if m.Content == "" && len(m.Attachments) == 0 {
 		return
 	}
 
@@ -59,6 +81,14 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 //
 //	It ignores messages from moderators and messages sent in excluded channels. The checks are here because we still want to update the cache for those messages.
 func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
+	// Safety check: ensure database is available
+	if d.db == nil {
+		return
+	}
+	// Ignore if user is already pending ban to prevent duplicate actions
+	if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
+		return
+	}
 	// Ignore messages from moderators
 	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
 		return
@@ -146,6 +176,11 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 		}
 
 		if matched {
+			// Check if user is already pending ban before processing
+			if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
+				return true
+			}
+
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
@@ -185,6 +220,11 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 
 			// Check if threshold is reached
 			if violationCount >= d.cache.violationThreshold {
+				// Mark user as pending ban to prevent duplicate actions from concurrent handlers
+				if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
+					// User is already being banned, skip
+					return true
+				}
 				// Ban the user
 				d.logAutomoderationAction(s, m, model.ActionBan, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
 				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le mot `%s` est banni\n%d automod violations", bannedWord.WordPattern, violationCount))
@@ -261,6 +301,11 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 
 		// Check if the banned website pattern appears in the message
 		if strings.Contains(messageLower, websiteLower) {
+			// Check if user is already pending ban before processing
+			if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
+				return true
+			}
+
 			// Increment violation count
 			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
 
@@ -301,6 +346,11 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 
 			// Check if threshold is reached
 			if violationCount >= d.cache.violationThreshold {
+				// Mark user as pending ban to prevent duplicate actions from concurrent handlers
+				if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
+					// User is already being banned, skip
+					return true
+				}
 				// Ban the user
 				d.logAutomoderationAction(s, m, model.ActionBan, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
 				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le site `%s` est banni\n%d automod violations", bannedWebsite.WebsiteURL, violationCount))
@@ -366,6 +416,11 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 	// 1. The threshold is reached
 	// 2. The messages were sent across multiple channels (more than x unique channel)
 	if duplicateCount >= d.cache.GetViolationThreshold() && len(channelsUsed) >= d.cache.GetViolationThreshold() {
+		// Mark user as pending ban to prevent duplicate actions from concurrent handlers
+		if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
+			// User is already being banned, skip
+			return true
+		}
 		// Log and ban the user
 		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
 		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))

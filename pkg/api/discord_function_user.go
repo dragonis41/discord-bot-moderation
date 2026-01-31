@@ -54,7 +54,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					Description: "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -94,7 +94,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					Description: "Aucun rôle de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -117,7 +117,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					Description: "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -136,7 +136,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 					Description: "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -193,7 +193,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 				Description: fmt.Sprintf("L'utilisateur %s a été signalé à la moderation", reportedUser.Username),
 				Color:       model.Green.Int(),
 				Footer:      &discordgo.MessageEmbedFooter{Text: "Merci de rendre ce serveur plus sain."},
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -266,7 +266,7 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 		Description: "Voici la liste des commandes disponibles :",
 		Color:       model.Blue.Int(),
 		Fields:      fields,
-		Timestamp:   time.Now().Format(time.DateTime),
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{

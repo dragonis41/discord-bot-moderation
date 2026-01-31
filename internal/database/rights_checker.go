@@ -30,6 +30,11 @@ func (d *Database) CheckModerationPermissionOnInteraction(s *discordgo.Session, 
 //
 //	It does not respond to the user; it simply returns true or false.
 func (d *Database) UserHasModerationRole(guildID string, member *discordgo.Member) bool {
+	// If member is nil, we can't check roles - treat as moderator to prevent banning issues
+	if member == nil {
+		return true
+	}
+
 	modRoles, err := d.GetModerationRolesByGuildId(guildID)
 	if err != nil {
 		return false

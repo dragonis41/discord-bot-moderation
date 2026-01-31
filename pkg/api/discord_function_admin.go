@@ -120,7 +120,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		const maxLength = 950 // Leave some margin below 1024
 
 		for _, entry := range last5Errors {
-			logEntry := fmt.Sprintf("- [**%s**] `%s` : \n`%s`\n", entry.CreatedAt, entry.Function, entry.Content)
+			logEntry := fmt.Sprintf("- [%s] `%s` : \n`%s`\n", formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content)
 
 			// Check if adding this entry would exceed the limit
 			if len(errorMessages)+len(logEntry) > maxLength {
@@ -146,7 +146,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 				Color:     model.Green.Int(),
 				Fields:    fields,
 				Footer:    model.DefaultFooter,
-				Timestamp: time.Now().Format(time.DateTime),
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -193,7 +193,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		// Send error message
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Message History", Color: model.Red.Int(), Description: "La limite doit être comprise entre 1 et 100.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Message History", Color: model.Red.Int(), Description: "La limite doit être comprise entre 1 et 100.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -209,7 +209,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	if len(historyMessages) == 0 {
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Message History", Color: model.Red.Int(), Description: "Aucun message en cache pour ce serveur.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Message History", Color: model.Red.Int(), Description: "Aucun message en cache pour ce serveur.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -242,8 +242,8 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
 		}
 
-		messageContent += fmt.Sprintf("----------------------------------------\n[%s] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s\n",
-			msg.Timestamp.Format(time.DateTime),
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s\n",
+			msg.Timestamp.UTC().Format(time.DateTime),
 			username,
 			msg.AuthorID,
 			channel.Name,
@@ -255,7 +255,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Files: []*discordgo.File{
 			{
-				Name:        "message_history.txt",
+				Name:        fmt.Sprintf("message_history_%s_%s.txt", i.GuildID, time.Now().Format("20060102_150405")),
 				ContentType: "text/plain",
 				Reader:      bytes.NewReader([]byte(messageContent)),
 			},
@@ -298,7 +298,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -316,7 +316,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -335,8 +335,8 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		const maxLength = 950 // Leave some margin below 1024
 
 		for _, entry := range last10Errors {
-			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] `%s` : \n`%s`\n",
-				entry.CreatedAt, entry.Function, entry.Content)
+			logEntry := fmt.Sprintf("----------------------------------------\n- [%s] `%s` : \n`%s`\n",
+				formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content)
 
 			// Check if adding this entry would exceed the limit
 			if len(errorMessages)+len(logEntry) > maxLength {
@@ -355,7 +355,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 		},
 	})
 	if err != nil {
@@ -395,7 +395,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -413,7 +413,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		})
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 			},
 		})
 		if err != nil {
@@ -432,8 +432,8 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		const maxLength = 950 // Leave some margin below 1024
 
 		for _, entry := range last10Errors {
-			logEntry := fmt.Sprintf("----------------------------------------\n- [**%s**] Action : `%s` <@%s> (ID: %s) : \n`%s`\n",
-				entry.CreatedAt, entry.Action, entry.UserID, entry.UserID, entry.Reason)
+			logEntry := fmt.Sprintf("----------------------------------------\n- [%s] Action : `%s` <@%s> (ID: %s) : \n`%s`\n",
+				formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.UserID, entry.Reason)
 
 			// Check if adding this entry would exceed the limit
 			if len(errorMessages)+len(logEntry) > maxLength {
@@ -452,7 +452,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 
 	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().Format(time.DateTime)},
+			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 		},
 	})
 	if err != nil {
@@ -460,4 +460,24 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
 		})
 	}
+}
+
+// formatDiscordTimestamp converts a string timestamp to Discord's timestamp format
+// It tries multiple common formats and returns a Discord timestamp that displays in user's local time
+func formatDiscordTimestamp(timestamp string) string {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05",
+		time.DateTime,
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, timestamp); err == nil {
+			return fmt.Sprintf("<t:%d:f>", t.Unix())
+		}
+	}
+
+	// If parsing fails, return the original timestamp
+	return timestamp
 }

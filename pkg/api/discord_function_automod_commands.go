@@ -65,7 +65,7 @@ func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCr
 					Description: "Le mot ne peut pas être vide.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -85,7 +85,7 @@ func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCr
 					Description: "Une erreur est survenue lors de l'ajout du mot interdit.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -104,7 +104,7 @@ func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCr
 				Description: fmt.Sprintf("Le mot `%s` (type: %s) a été ajouté à la liste des mots interdits.", wordPattern, wordType),
 				Color:       model.Green.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -156,7 +156,7 @@ func (d *Discord) removeBannedWord(s *discordgo.Session, i *discordgo.Interactio
 					Description: "L'ID du mot est requis.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -176,7 +176,7 @@ func (d *Discord) removeBannedWord(s *discordgo.Session, i *discordgo.Interactio
 					Description: "Une erreur est survenue lors de la suppression du mot interdit.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -190,7 +190,7 @@ func (d *Discord) removeBannedWord(s *discordgo.Session, i *discordgo.Interactio
 				Description: fmt.Sprintf("Le mot avec l'ID `%d` a été supprimé de la liste des mots interdits.", wordID),
 				Color:       model.Green.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -237,7 +237,7 @@ func (d *Discord) listBannedWords(s *discordgo.Session, i *discordgo.Interaction
 					Description: "Une erreur est survenue lors de la récupération des mots interdits.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -252,7 +252,7 @@ func (d *Discord) listBannedWords(s *discordgo.Session, i *discordgo.Interaction
 					Description: "Aucun mot interdit n'est configuré pour ce serveur.",
 					Color:       model.Blue.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -284,7 +284,7 @@ func (d *Discord) listBannedWords(s *discordgo.Session, i *discordgo.Interaction
 				Description: description,
 				Color:       model.Blue.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -336,7 +336,7 @@ func (d *Discord) addBannedWebsite(s *discordgo.Session, i *discordgo.Interactio
 					Description: "L'URL ne peut pas être vide.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -356,7 +356,7 @@ func (d *Discord) addBannedWebsite(s *discordgo.Session, i *discordgo.Interactio
 					Description: "Une erreur est survenue lors de l'ajout du site web interdit.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -370,7 +370,7 @@ func (d *Discord) addBannedWebsite(s *discordgo.Session, i *discordgo.Interactio
 				Description: fmt.Sprintf("Le site `%s` a été ajouté à la liste des sites web interdits.", websiteURL),
 				Color:       model.Green.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -422,7 +422,7 @@ func (d *Discord) removeBannedWebsite(s *discordgo.Session, i *discordgo.Interac
 					Description: "L'ID du site est requis.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -442,7 +442,7 @@ func (d *Discord) removeBannedWebsite(s *discordgo.Session, i *discordgo.Interac
 					Description: "Une erreur est survenue lors de la suppression du site web interdit.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -456,7 +456,7 @@ func (d *Discord) removeBannedWebsite(s *discordgo.Session, i *discordgo.Interac
 				Description: fmt.Sprintf("Le site avec l'ID `%d` a été supprimé de la liste des sites web interdits.", websiteID),
 				Color:       model.Green.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -503,7 +503,7 @@ func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.Interact
 					Description: "Une erreur est survenue lors de la récupération des sites web interdits.",
 					Color:       model.Red.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -518,7 +518,7 @@ func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.Interact
 					Description: "Aucun site web interdit n'est configuré pour ce serveur.",
 					Color:       model.Blue.Int(),
 					Footer:      model.DefaultFooter,
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -546,7 +546,7 @@ func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.Interact
 				Description: description,
 				Color:       model.Blue.Int(),
 				Footer:      model.DefaultFooter,
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})

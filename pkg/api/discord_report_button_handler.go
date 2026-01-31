@@ -111,7 +111,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 					Title:       "Erreur",
 					Description: "Impossible de récupérer les informations de l'utilisateur.",
 					Color:       model.Red.Int(),
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -136,14 +136,14 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 
 	switch action {
 	case "kick":
-		reason := fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] pour la raison suivante : \n`%s`", guild.Name, reason))
+		reason := fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Expulsé suite à un signalement`", guild.Name, time.Now().Unix()))
 		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, reason)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été expulsé du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", i.Member.User.Username, ReportedUser.Username)
 	case "ban":
-		reason := fmt.Sprintf("Banni le %s suite à un signalement", time.Now().Format("02/01/2006 à 15:04"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] pour la raison suivante : \n`%s`", guild.Name, reason))
+		reason := fmt.Sprintf("Banni le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Banni suite à un signalement`", guild.Name, time.Now().Unix()))
 		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, reason, 1)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été banni du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", i.Member.User.Username, ReportedUser.Username)
@@ -165,7 +165,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 					Title:       "Erreur",
 					Description: fmt.Sprintf("Impossible d'effectuer l'action. Vérifiez que le bot a les permissions nécessaires et que l'utilisateur est toujours sur le serveur."),
 					Color:       model.Red.Int(),
-					Timestamp:   time.Now().Format(time.DateTime),
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
 				},
 			},
 		})
@@ -186,7 +186,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 				Title:       "Action effectuée",
 				Description: successMessage,
 				Color:       model.Green.Int(),
-				Timestamp:   time.Now().Format(time.DateTime),
+				Timestamp:   time.Now().UTC().Format(time.RFC3339),
 			},
 		},
 	})
@@ -201,13 +201,13 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 
 	// Update the original report message to show the action was taken
 	updatedEmbed := i.Message.Embeds[0]
-	updatedEmbed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("%s effectué par %s le %s",
-			action,
-			i.Member.User.Username,
-			time.Now().Format("02/01/2006 à 15:04"),
-		),
+	// Use Discord's timestamp in embed description for local time display
+	if updatedEmbed.Description != "" {
+		updatedEmbed.Description += fmt.Sprintf("\n\n%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+	} else {
+		updatedEmbed.Description = fmt.Sprintf("%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
 	}
+	updatedEmbed.Footer = nil
 
 	// Remove buttons
 	_, err = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
