@@ -183,7 +183,7 @@ func (d *Discord) getAutomoderationFeaturesAsItems(s *discordgo.Session, guildID
 		AutomodFeatureItem{
 			ID:          "spam_detection",
 			Name:        "🚨 Détection de spam",
-			Description: "Bannit automatiquement les utilisateurs qui spam des messages",
+			Description: "Bannit automatiquement les utilisateurs qui spamment des messages",
 		},
 	}
 	return features, nil
