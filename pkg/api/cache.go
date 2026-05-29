@@ -8,6 +8,12 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// CachedSticker holds the identity of a sticker for display and spam comparison.
+type CachedSticker struct {
+	ID   string
+	Name string
+}
+
 // MessageCache stores recent messages for spam detection
 type MessageCache struct {
 	GuildID         string
@@ -18,7 +24,8 @@ type MessageCache struct {
 	AuthorUsername  string
 	Timestamp       time.Time
 	AttachmentCount int
-	StickerIDs      string
+	AttachmentNames []string
+	Stickers        []CachedSticker
 	HasEmbeds       bool
 }
 
@@ -118,7 +125,8 @@ func (c *Cache) AddMessage(m *discordgo.MessageCreate) {
 		AuthorUsername:  m.Author.Username,
 		Timestamp:       time.Now(),
 		AttachmentCount: len(m.Attachments),
-		StickerIDs:      stickerIDs(m.StickerItems),
+		AttachmentNames: attachmentNames(m.Attachments),
+		Stickers:        cachedStickers(m.StickerItems),
 		HasEmbeds:       len(m.Embeds) > 0,
 	})
 
@@ -319,7 +327,31 @@ func (c *Cache) ClearPendingBan(guildID, userID string) {
 	delete(c.pendingBans, key)
 }
 
-func stickerIDs(items []*discordgo.StickerItem) string {
+func cachedStickers(items []*discordgo.StickerItem) []CachedSticker {
+	stickers := make([]CachedSticker, len(items))
+	for i, s := range items {
+		stickers[i] = CachedSticker{ID: s.ID, Name: s.Name}
+	}
+	return stickers
+}
+
+func attachmentNames(attachments []*discordgo.MessageAttachment) []string {
+	names := make([]string, len(attachments))
+	for i, a := range attachments {
+		names[i] = a.Filename
+	}
+	return names
+}
+
+func stickerIDsFromCache(stickers []CachedSticker) string {
+	ids := make([]string, len(stickers))
+	for i, s := range stickers {
+		ids[i] = s.ID
+	}
+	return strings.Join(ids, ",")
+}
+
+func stickerIDsFromItems(items []*discordgo.StickerItem) string {
 	ids := make([]string, len(items))
 	for i, s := range items {
 		ids[i] = s.ID

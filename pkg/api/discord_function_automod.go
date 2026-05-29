@@ -409,7 +409,7 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 		// Check if message is within the violation window
 		if now.Sub(msg.Timestamp) <= d.cache.GetViolationWindow() {
 			// Exact match comparison
-			if msg.Content == m.Content && msg.AttachmentCount == len(m.Attachments) && msg.StickerIDs == stickerIDs(m.StickerItems) {
+			if msg.Content == m.Content && msg.AttachmentCount == len(m.Attachments) && stickerIDsFromCache(msg.Stickers) == stickerIDsFromItems(m.StickerItems) {
 				duplicateCount++
 				channelsUsed[msg.ChannelID] = true
 			}
