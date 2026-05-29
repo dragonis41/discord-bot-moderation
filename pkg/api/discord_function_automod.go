@@ -33,6 +33,10 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 	if m.GuildID == "" {
 		return
 	}
+	// Ignore system messages (thread starters, pins, join notifications, etc.)
+	if m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply {
+		return
+	}
 
 	// Add message to cache
 	d.cache.AddMessage(m)
