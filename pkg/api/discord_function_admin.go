@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -241,14 +242,19 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		if msg.AttachmentCount > 0 {
 			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
 		}
+		stickers := ""
+		if msg.StickerIDs != "" {
+			stickers = fmt.Sprintf("\nStickers : <%d Sticker(s)>", strings.Count(msg.StickerIDs, ",")+1)
+		}
 
-		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s\n",
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s%s\n",
 			msg.Timestamp.UTC().Format(time.DateTime),
 			username,
 			msg.AuthorID,
 			channel.Name,
 			msg.Content,
 			attachments,
+			stickers,
 		)
 	}
 

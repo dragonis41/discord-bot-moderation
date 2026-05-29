@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ type MessageCache struct {
 	AuthorUsername  string
 	Timestamp       time.Time
 	AttachmentCount int
+	StickerIDs      string
 	HasEmbeds       bool
 }
 
@@ -116,6 +118,7 @@ func (c *Cache) AddMessage(m *discordgo.MessageCreate) {
 		AuthorUsername:  m.Author.Username,
 		Timestamp:       time.Now(),
 		AttachmentCount: len(m.Attachments),
+		StickerIDs:      stickerIDs(m.StickerItems),
 		HasEmbeds:       len(m.Embeds) > 0,
 	})
 
@@ -314,4 +317,12 @@ func (c *Cache) ClearPendingBan(guildID, userID string) {
 
 	key := guildID + ":" + userID
 	delete(c.pendingBans, key)
+}
+
+func stickerIDs(items []*discordgo.StickerItem) string {
+	ids := make([]string, len(items))
+	for i, s := range items {
+		ids[i] = s.ID
+	}
+	return strings.Join(ids, ",")
 }
