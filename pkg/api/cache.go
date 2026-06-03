@@ -277,7 +277,7 @@ func (c *Cache) GetViolationCount(guildID, userID string) int {
 	}
 
 	// Check if violation window has expired
-	if time.Now().Sub(violation.LastViolation) > c.violationWindow {
+	if time.Since(violation.LastViolation) > c.violationWindow {
 		return 0
 	}
 

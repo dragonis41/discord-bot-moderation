@@ -49,59 +49,57 @@ func (d *Database) MigrateGuildChannels() error {
 	return nil
 }
 
-// Log Channel Functions
+// Generic helpers shared by all channel types --------------------------------
+//
+// Log, moderation and excluded channels are all rows in guild_channels that
+// differ only by channel_type, so the CRUD logic is implemented once and the
+// public, type-specific functions simply delegate with the right type.
 
-func (d *Database) AddLogChannel(guildID, channelID string) error {
+func (d *Database) addChannel(guildID, channelID, channelType string) error {
 	insertQuery := `
 	INSERT OR IGNORE INTO guild_channels (guild_id, channel_id, channel_type)
 	VALUES (?, ?, ?);
 	`
 
-	_, err := d.db.Exec(insertQuery, guildID, channelID, model.ChannelTypeLog)
-	if err != nil {
-		return fmt.Errorf("failed to add log channel: %w", err)
+	if _, err := d.db.Exec(insertQuery, guildID, channelID, channelType); err != nil {
+		return fmt.Errorf("failed to add %s channel: %w", channelType, err)
 	}
-
 	return nil
 }
 
-func (d *Database) RemoveLogChannel(guildID, channelID string) error {
+func (d *Database) removeChannel(guildID, channelID, channelType string) error {
 	deleteQuery := `
 	DELETE FROM guild_channels
 	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
 	`
 
-	_, err := d.db.Exec(deleteQuery, guildID, channelID, model.ChannelTypeLog)
-	if err != nil {
-		return fmt.Errorf("failed to remove log channel: %w", err)
+	if _, err := d.db.Exec(deleteQuery, guildID, channelID, channelType); err != nil {
+		return fmt.Errorf("failed to remove %s channel: %w", channelType, err)
 	}
-
 	return nil
 }
 
-func (d *Database) RemoveLogChannelsByGuild(guildID string) error {
+func (d *Database) removeChannelsByGuild(guildID, channelType string) error {
 	deleteQuery := `
 	DELETE FROM guild_channels
 	WHERE guild_id = ? AND channel_type = ?;
 	`
 
-	_, err := d.db.Exec(deleteQuery, guildID, model.ChannelTypeLog)
-	if err != nil {
-		return fmt.Errorf("failed to remove log channels by guild: %w", err)
+	if _, err := d.db.Exec(deleteQuery, guildID, channelType); err != nil {
+		return fmt.Errorf("failed to remove %s channels by guild: %w", channelType, err)
 	}
-
 	return nil
 }
 
-func (d *Database) GetLogChannelsByGuildId(guildID string) ([]string, error) {
+func (d *Database) getChannelsByGuild(guildID, channelType string) ([]string, error) {
 	selectQuery := `
 	SELECT channel_id FROM guild_channels
 	WHERE guild_id = ? AND channel_type = ?;
 	`
 
-	rows, err := d.db.Query(selectQuery, guildID, model.ChannelTypeLog)
+	rows, err := d.db.Query(selectQuery, guildID, channelType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get log channels: %w", err)
+		return nil, fmt.Errorf("failed to get %s channels: %w", channelType, err)
 	}
 	defer rows.Close()
 
@@ -121,203 +119,78 @@ func (d *Database) GetLogChannelsByGuildId(guildID string) ([]string, error) {
 	return channelIDs, nil
 }
 
-func (d *Database) IsLogChannel(guildID, channelID string) bool {
+func (d *Database) isChannel(guildID, channelID, channelType string) bool {
 	selectQuery := `
 	SELECT 1 FROM guild_channels
 	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
 	`
 
-	row := d.db.QueryRow(selectQuery, guildID, channelID, model.ChannelTypeLog)
 	var exists int
-	err := row.Scan(&exists)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			return false
-		}
-		return false
-	}
+	return d.db.QueryRow(selectQuery, guildID, channelID, channelType).Scan(&exists) == nil
+}
 
-	return true
+// Log Channel Functions
+
+func (d *Database) AddLogChannel(guildID, channelID string) error {
+	return d.addChannel(guildID, channelID, model.ChannelTypeLog)
+}
+
+func (d *Database) RemoveLogChannel(guildID, channelID string) error {
+	return d.removeChannel(guildID, channelID, model.ChannelTypeLog)
+}
+
+func (d *Database) RemoveLogChannelsByGuild(guildID string) error {
+	return d.removeChannelsByGuild(guildID, model.ChannelTypeLog)
+}
+
+func (d *Database) GetLogChannelsByGuildId(guildID string) ([]string, error) {
+	return d.getChannelsByGuild(guildID, model.ChannelTypeLog)
+}
+
+func (d *Database) IsLogChannel(guildID, channelID string) bool {
+	return d.isChannel(guildID, channelID, model.ChannelTypeLog)
 }
 
 // Moderation Channel Functions
 
 func (d *Database) AddModerationChannel(guildID, channelID string) error {
-	insertQuery := `
-	INSERT OR IGNORE INTO guild_channels (guild_id, channel_id, channel_type)
-	VALUES (?, ?, ?);
-	`
-
-	_, err := d.db.Exec(insertQuery, guildID, channelID, model.ChannelTypeModeration)
-	if err != nil {
-		return fmt.Errorf("failed to add moderation channel: %w", err)
-	}
-
-	return nil
+	return d.addChannel(guildID, channelID, model.ChannelTypeModeration)
 }
 
 func (d *Database) RemoveModerationChannel(guildID, channelID string) error {
-	deleteQuery := `
-	DELETE FROM guild_channels
-	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
-	`
-
-	_, err := d.db.Exec(deleteQuery, guildID, channelID, model.ChannelTypeModeration)
-	if err != nil {
-		return fmt.Errorf("failed to remove moderation channel: %w", err)
-	}
-
-	return nil
+	return d.removeChannel(guildID, channelID, model.ChannelTypeModeration)
 }
 
 func (d *Database) RemoveModerationChannelsByGuild(guildID string) error {
-	deleteQuery := `
-	DELETE FROM guild_channels
-	WHERE guild_id = ? AND channel_type = ?;
-	`
-
-	_, err := d.db.Exec(deleteQuery, guildID, model.ChannelTypeModeration)
-	if err != nil {
-		return fmt.Errorf("failed to remove moderation channels by guild: %w", err)
-	}
-
-	return nil
+	return d.removeChannelsByGuild(guildID, model.ChannelTypeModeration)
 }
 
 func (d *Database) GetModerationChannelsByGuildId(guildID string) ([]string, error) {
-	selectQuery := `
-	SELECT channel_id FROM guild_channels
-	WHERE guild_id = ? AND channel_type = ?;
-	`
-
-	rows, err := d.db.Query(selectQuery, guildID, model.ChannelTypeModeration)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get moderation channels: %w", err)
-	}
-	defer rows.Close()
-
-	var channelIDs []string
-	for rows.Next() {
-		var channelID string
-		if err := rows.Scan(&channelID); err != nil {
-			return nil, fmt.Errorf("failed to scan channel ID: %w", err)
-		}
-		channelIDs = append(channelIDs, channelID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
-	}
-
-	return channelIDs, nil
+	return d.getChannelsByGuild(guildID, model.ChannelTypeModeration)
 }
 
 func (d *Database) IsModerationChannel(guildID, channelID string) bool {
-	selectQuery := `
-	SELECT 1 FROM guild_channels
-	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
-	`
-
-	row := d.db.QueryRow(selectQuery, guildID, channelID, model.ChannelTypeModeration)
-	var exists int
-	err := row.Scan(&exists)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			return false
-		}
-		return false
-	}
-
-	return true
+	return d.isChannel(guildID, channelID, model.ChannelTypeModeration)
 }
 
 // Excluded Channel Functions
 
 func (d *Database) AddExcludedChannel(guildID, channelID string) error {
-	insertQuery := `
-	INSERT OR IGNORE INTO guild_channels (guild_id, channel_id, channel_type)
-	VALUES (?, ?, ?);
-	`
-
-	_, err := d.db.Exec(insertQuery, guildID, channelID, model.ChannelTypeExcluded)
-	if err != nil {
-		return fmt.Errorf("failed to add excluded channel: %w", err)
-	}
-
-	return nil
+	return d.addChannel(guildID, channelID, model.ChannelTypeExcluded)
 }
 
 func (d *Database) RemoveExcludedChannel(guildID, channelID string) error {
-	deleteQuery := `
-	DELETE FROM guild_channels
-	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
-	`
-
-	_, err := d.db.Exec(deleteQuery, guildID, channelID, model.ChannelTypeExcluded)
-	if err != nil {
-		return fmt.Errorf("failed to remove excluded channel: %w", err)
-	}
-
-	return nil
+	return d.removeChannel(guildID, channelID, model.ChannelTypeExcluded)
 }
 
 func (d *Database) RemoveExcludedChannelsByGuild(guildID string) error {
-	deleteQuery := `
-	DELETE FROM guild_channels
-	WHERE guild_id = ? AND channel_type = ?;
-	`
-
-	_, err := d.db.Exec(deleteQuery, guildID, model.ChannelTypeExcluded)
-	if err != nil {
-		return fmt.Errorf("failed to remove excluded channels by guild: %w", err)
-	}
-
-	return nil
+	return d.removeChannelsByGuild(guildID, model.ChannelTypeExcluded)
 }
 
 func (d *Database) GetExcludedChannelsByGuildId(guildID string) ([]string, error) {
-	selectQuery := `
-	SELECT channel_id FROM guild_channels
-	WHERE guild_id = ? AND channel_type = ?;
-	`
-
-	rows, err := d.db.Query(selectQuery, guildID, model.ChannelTypeExcluded)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get excluded channels: %w", err)
-	}
-	defer rows.Close()
-
-	var channelIDs []string
-	for rows.Next() {
-		var channelID string
-		if err := rows.Scan(&channelID); err != nil {
-			return nil, fmt.Errorf("failed to scan channel ID: %w", err)
-		}
-		channelIDs = append(channelIDs, channelID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
-	}
-
-	return channelIDs, nil
+	return d.getChannelsByGuild(guildID, model.ChannelTypeExcluded)
 }
 
 func (d *Database) IsExcludedChannel(guildID, channelID string) bool {
-	selectQuery := `
-	SELECT 1 FROM guild_channels
-	WHERE guild_id = ? AND channel_id = ? AND channel_type = ?;
-	`
-
-	row := d.db.QueryRow(selectQuery, guildID, channelID, model.ChannelTypeExcluded)
-	var exists int
-	err := row.Scan(&exists)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			return false
-		}
-		return false
-	}
-
-	return true
+	return d.isChannel(guildID, channelID, model.ChannelTypeExcluded)
 }

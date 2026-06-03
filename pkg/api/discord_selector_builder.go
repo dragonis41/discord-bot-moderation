@@ -8,7 +8,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
-	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
@@ -83,12 +82,7 @@ func (d *Discord) sendSelectPage(
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
 			Components: &components,
 		}); err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  interaction.GuildID,
-				Function: "sendSelectPage()",
-				Message:  fmt.Sprintf("Error updating message: %s", err),
-			})
+			d.logError(interaction.GuildID, "sendSelectPage()", "Error updating message: %s", err)
 		}
 	} else {
 		// Create new message
@@ -96,12 +90,7 @@ func (d *Discord) sendSelectPage(
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		}); err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  interaction.GuildID,
-				Function: "sendSelectPage()",
-				Message:  fmt.Sprintf("Error sending follow-up message: %s", err),
-			})
+			d.logError(interaction.GuildID, "sendSelectPage()", "Error sending follow-up message: %s", err)
 		}
 	}
 }
@@ -123,12 +112,7 @@ func (d *Discord) buildSelectMessage(
 	// Build select menu options
 	previouslySelected, err := dbOps.GetSelected(guildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  guildID,
-			Function: "buildSelectMessage()",
-			Message:  fmt.Sprintf("Error fetching selected items: %s", err),
-		})
+		d.logError(guildID, "buildSelectMessage()", "Error fetching selected items: %s", err)
 	}
 	options := d.buildSelectMenuOptions(items[start:end], previouslySelected, config.EmojiName)
 
@@ -268,12 +252,7 @@ func (d *Discord) handleSelection(
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Content: "Mise à jour..."},
 	}); err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleSelection()",
-			Message:  fmt.Sprintf("Error responding to interaction: %s", err),
-		})
+		d.logError(i.GuildID, "handleSelection()", "Error responding to interaction: %s", err)
 		return
 	}
 
@@ -301,12 +280,7 @@ func (d *Discord) handleSelectionUpdate(
 
 	items, err := itemsFetcher(s, i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleSelectionUpdate()",
-			Message:  fmt.Sprintf("Error fetching items: %s", err),
-		})
+		d.logError(i.GuildID, "handleSelectionUpdate()", "Error fetching items: %s", err)
 		return
 	}
 
@@ -323,12 +297,7 @@ func (d *Discord) handleSelectionUpdate(
 	newSelections := make(map[string]bool)
 	selectedItems, err := dbOps.GetSelected(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleSelectionUpdate()",
-			Message:  fmt.Sprintf("Error fetching selected items: %s", err),
-		})
+		d.logError(i.GuildID, "handleSelectionUpdate()", "Error fetching selected items: %s", err)
 	}
 	for _, id := range selectedItems {
 		if !pageItemIDs[id] {
@@ -342,22 +311,11 @@ func (d *Discord) handleSelectionUpdate(
 	// Clear the database and re-add selections
 	err = dbOps.RemoveByGuild(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleSelectionUpdate()",
-			Message:  fmt.Sprintf("Error clearing selected items: %s", err),
-		})
+		d.logError(i.GuildID, "handleSelectionUpdate()", "Error clearing selected items: %s", err)
 	}
 	for id := range newSelections {
-		err := dbOps.Add(i.GuildID, id)
-		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  i.GuildID,
-				Function: "handleSelectionUpdate()",
-				Message:  fmt.Sprintf("Error adding selected item [%s]: %s", id, err),
-			})
+		if err := dbOps.Add(i.GuildID, id); err != nil {
+			d.logError(i.GuildID, "handleSelectionUpdate()", "Error adding selected item [%s]: %s", id, err)
 		}
 	}
 
@@ -398,12 +356,7 @@ func (d *Discord) handleSelectionDone(
 ) {
 	selectedIDs, err := dbOps.GetSelected(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleSelectionDone()",
-			Message:  fmt.Sprintf("Error fetching selected items: %s", err),
-		})
+		d.logError(i.GuildID, "handleSelectionDone()", "Error fetching selected items: %s", err)
 	}
 
 	description := config.DoneDescription
@@ -411,12 +364,7 @@ func (d *Discord) handleSelectionDone(
 		// Fetch all items to get their details
 		allItems, err := itemsFetcher(s, i.GuildID)
 		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  i.GuildID,
-				Function: "handleSelectionDone()",
-				Message:  fmt.Sprintf("Error fetching items for done message: %s", err),
-			})
+			d.logError(i.GuildID, "handleSelectionDone()", "Error fetching items for done message: %s", err)
 		} else {
 			// Filter only selected items
 			selectedItemsMap := make(map[string]bool)
@@ -447,12 +395,7 @@ func (d *Discord) handleSelectionDone(
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	d.log.LogInfo(logger.LogModel{
-		Database: d.db,
-		GuildID:  i.GuildID,
-		Function: "handleSelectionDone()",
-		Message:  fmt.Sprintf("User [%s] finished selecting %d items for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID),
-	})
+	d.logInfo(i.GuildID, "handleSelectionDone()", "User [%s] finished selecting %d items for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID)
 }
 
 // editSelectMessage edits the selection message
@@ -471,12 +414,7 @@ func (d *Discord) editSelectMessage(
 		Components: &components,
 		Content:    nil,
 	}); err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "editSelectMessage()",
-			Message:  fmt.Sprintf("Error editing message: %s", err),
-		})
+		d.logError(i.GuildID, "editSelectMessage()", "Error editing message: %s", err)
 	}
 }
 

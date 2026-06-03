@@ -51,17 +51,12 @@ func (d *Discord) RunDiscordBot() {
 	// open session
 	err := d.client.Open()
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-			Message: fmt.Sprintf("Error opening Discord session: %s", err),
-		})
+		d.logError("", "RunDiscordBot()", "Error opening Discord session: %s", err)
 		return
 	}
 	defer func(discordClient *discordgo.Session) {
-		err := discordClient.Close()
-		if err != nil {
-			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-				Message: fmt.Sprintf("Error while closing the Discord session: %s", err),
-			})
+		if err := discordClient.Close(); err != nil {
+			d.logWarning("", "RunDiscordBot()", "Error while closing the Discord session: %s", err)
 		}
 	}(d.client) // close session, after function termination
 
@@ -79,9 +74,7 @@ func (d *Discord) RunDiscordBot() {
 
 	// Initialize system stats
 	if err := utils.InitSystemStats(); err != nil {
-		d.log.LogWarning(logger.LogModel{Database: d.db, Function: "RunDiscordBot()",
-			Message: fmt.Sprintf("Failed to initialize system stats: %v", err),
-		})
+		d.logWarning("", "RunDiscordBot()", "Failed to initialize system stats: %v", err)
 	}
 
 	// Register slash commands
@@ -238,13 +231,9 @@ func (d *Discord) registerSlashCommands() {
 	for _, guild := range d.client.State.Guilds {
 		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, commands)
 		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, Function: "registerSlashCommands()",
-				Message: fmt.Sprintf("Cannot register commands for guild %s: %v", guild.ID, err),
-			})
+			d.logError(guild.ID, "registerSlashCommands()", "Cannot register commands for guild %s: %v", guild.ID, err)
 		} else {
-			d.log.LogSuccess(logger.LogModel{Database: d.db, Function: "registerSlashCommands()",
-				Message: fmt.Sprintf("Registered all slash commands for guild %s", guild.ID),
-			})
+			d.logSuccess(guild.ID, "registerSlashCommands()", "Registered all slash commands for guild %s", guild.ID)
 		}
 	}
 }
@@ -301,13 +290,9 @@ func (d *Discord) removeSlashCommands() {
 		// Pass an empty slice to remove all commands
 		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, []*discordgo.ApplicationCommand{})
 		if err != nil {
-			d.log.LogWarning(logger.LogModel{Database: d.db, Function: "removeSlashCommands()",
-				Message: fmt.Sprintf("Cannot remove commands from guild %s: %v", guild.ID, err),
-			})
+			d.logWarning(guild.ID, "removeSlashCommands()", "Cannot remove commands from guild %s: %v", guild.ID, err)
 		} else {
-			d.log.LogSuccess(logger.LogModel{Database: d.db, Function: "removeSlashCommands()",
-				Message: fmt.Sprintf("Removed all slash commands from guild %s", guild.ID),
-			})
+			d.logSuccess(guild.ID, "removeSlashCommands()", "Removed all slash commands from guild %s", guild.ID)
 		}
 	}
 }
