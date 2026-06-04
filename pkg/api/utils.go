@@ -209,12 +209,12 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 	recentMessages := d.getUserRecentMessagesString(m.GuildID, m.Author, 10)
 
 	description := fmt.Sprintf(
-		"**Utilisateur**: <@%s> (ID: %s | Username : %s)\n"+
+		"**Utilisateur**: <@%s> (%s | %s)\n"+
 			"**Action**: `%s`\n"+
 			"**Triggered rule**: `%s`\n"+
 			"**Raison**: %s\n\n"+
 			"**Messages récents**: \n%s",
-		m.Author.ID, m.Author.ID, m.Author.Username, action, trigger, reason, recentMessages,
+		m.Author.ID, m.Author.Username, m.Author.ID, action, trigger, reason, recentMessages,
 	)
 
 	embed := &discordgo.MessageEmbed{

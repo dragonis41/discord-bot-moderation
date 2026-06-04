@@ -72,11 +72,11 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	messages := d.getUserRecentMessagesString(i.GuildID, reportedUser, 10)
 
 	description := truncate(fmt.Sprintf(
-		"**Utilisateur signalé**: <@!%s> (ID : %s | Username : %s)\n"+
+		"**Utilisateur signalé**: <@!%s> (%s | %s)\n"+
 			"**Salon**: <#%s>\n"+
 			"**Raison**: %s\n\n"+
 			"**Messages récents**:\n%s",
-		reportedUser.ID, reportedUser.ID, reportedUser.Username, i.ChannelID, reason, messages,
+		reportedUser.ID, reportedUser.Username, reportedUser.ID, i.ChannelID, reason, messages,
 	), maxEmbedDescriptionLength)
 
 	for _, channelID := range selectedChannels {
