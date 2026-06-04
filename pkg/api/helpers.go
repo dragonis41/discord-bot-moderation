@@ -102,7 +102,7 @@ func joinLinesWithLimit(lines []string, maxLen int) string {
 // deferEphemeral acknowledges an interaction with a deferred, ephemeral
 // response. It returns false (after logging) if the acknowledgement failed, in
 // which case the caller must stop processing.
-func (d *Discord) deferEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, function string) bool {
+func (d *Discord) deferEphemeral(s discordClient, i *discordgo.InteractionCreate, function string) bool {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
@@ -122,7 +122,7 @@ func (d *Discord) logCommand(i *discordgo.InteractionCreate, function string) {
 // beginModCommand runs the common preamble shared by every moderator-only
 // command: defer the response, log the invocation and verify permissions. It
 // returns false if the caller should stop (failed defer or missing permission).
-func (d *Discord) beginModCommand(s *discordgo.Session, i *discordgo.InteractionCreate, function string) bool {
+func (d *Discord) beginModCommand(s discordClient, i *discordgo.InteractionCreate, function string) bool {
 	if !d.deferEphemeral(s, i, function) {
 		return false
 	}
@@ -132,7 +132,7 @@ func (d *Discord) beginModCommand(s *discordgo.Session, i *discordgo.Interaction
 
 // followup sends an ephemeral follow-up message containing the given embeds,
 // logging any send error under function.
-func (d *Discord) followup(s *discordgo.Session, i *discordgo.InteractionCreate, function string, embeds ...*discordgo.MessageEmbed) {
+func (d *Discord) followup(s discordClient, i *discordgo.InteractionCreate, function string, embeds ...*discordgo.MessageEmbed) {
 	if _, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: embeds}); err != nil {
 		d.logError(i.GuildID, function, "Error sending follow-up message: %s", err)
 	}
@@ -156,7 +156,7 @@ func (d *Discord) guildDisplayName(guild *discordgo.Guild) string {
 // guildNameByID safely resolves a guild's name from its ID, returning a
 // placeholder if the guild cannot be fetched (instead of panicking on a nil
 // guild as the previous code did).
-func guildNameByID(s *discordgo.Session, guildID string) string {
+func guildNameByID(s discordSender, guildID string) string {
 	guild, err := s.Guild(guildID)
 	if err != nil || guild == nil {
 		return "<unknown>"

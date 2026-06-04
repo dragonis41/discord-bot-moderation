@@ -67,7 +67,7 @@ type DatabaseOperations interface {
 
 // sendSelectPage sends or updates the selection page
 func (d *Discord) sendSelectPage(
-	s *discordgo.Session,
+	s discordClient,
 	interaction *discordgo.Interaction,
 	items []SelectionItem,
 	page int,
@@ -227,11 +227,11 @@ func (d *Discord) buildNavigationButtons(page, totalPages int, prefix string) []
 
 // handleSelection is the generic handler for all selection interactions
 func (d *Discord) handleSelection(
-	s *discordgo.Session,
+	s discordClient,
 	i *discordgo.InteractionCreate,
 	config SelectionConfig,
 	dbOps DatabaseOperations,
-	itemsFetcher func(*discordgo.Session, string) ([]SelectionItem, error),
+	itemsFetcher func(discordClient, string) ([]SelectionItem, error),
 	formatDoneMessage func([]SelectionItem) string,
 ) {
 	// Check if this is a message component interaction
@@ -268,12 +268,12 @@ func (d *Discord) handleSelection(
 
 // handleSelectionUpdate updates the selection
 func (d *Discord) handleSelectionUpdate(
-	s *discordgo.Session,
+	s discordClient,
 	i *discordgo.InteractionCreate,
 	selectedOnPage []string,
 	config SelectionConfig,
 	dbOps DatabaseOperations,
-	itemsFetcher func(*discordgo.Session, string) ([]SelectionItem, error),
+	itemsFetcher func(discordClient, string) ([]SelectionItem, error),
 ) {
 	var page int
 	_, _ = fmt.Sscanf(i.MessageComponentData().CustomID, config.Prefix+"_select_menu_%d", &page)
@@ -324,11 +324,11 @@ func (d *Discord) handleSelectionUpdate(
 
 // handlePageNavigation handles page navigation
 func (d *Discord) handlePageNavigation(
-	s *discordgo.Session,
+	s discordClient,
 	i *discordgo.InteractionCreate,
 	customID string,
 	config SelectionConfig,
-	itemsFetcher func(*discordgo.Session, string) ([]SelectionItem, error),
+	itemsFetcher func(discordClient, string) ([]SelectionItem, error),
 	dbOps DatabaseOperations,
 ) {
 	var currentPage int
@@ -347,11 +347,11 @@ func (d *Discord) handlePageNavigation(
 
 // handleSelectionDone handles the completion of selection
 func (d *Discord) handleSelectionDone(
-	s *discordgo.Session,
+	s discordClient,
 	i *discordgo.InteractionCreate,
 	config SelectionConfig,
 	dbOps DatabaseOperations,
-	itemsFetcher func(*discordgo.Session, string) ([]SelectionItem, error),
+	itemsFetcher func(discordClient, string) ([]SelectionItem, error),
 	formatDoneMessage func([]SelectionItem) string,
 ) {
 	selectedIDs, err := dbOps.GetSelected(i.GuildID)
@@ -400,7 +400,7 @@ func (d *Discord) handleSelectionDone(
 
 // editSelectMessage edits the selection message
 func (d *Discord) editSelectMessage(
-	s *discordgo.Session,
+	s discordClient,
 	i *discordgo.InteractionCreate,
 	items []SelectionItem,
 	page int,
@@ -420,7 +420,7 @@ func (d *Discord) editSelectMessage(
 
 // Database operation wrappers for each type
 type LogChannelDB struct {
-	db *database.Database
+	db store
 }
 
 func (l *LogChannelDB) GetSelected(guildID string) ([]string, error) {
@@ -436,7 +436,7 @@ func (l *LogChannelDB) Add(guildID, itemID string) error {
 }
 
 type ModChannelDB struct {
-	db *database.Database
+	db store
 }
 
 func (m *ModChannelDB) GetSelected(guildID string) ([]string, error) {
@@ -452,7 +452,7 @@ func (m *ModChannelDB) Add(guildID, itemID string) error {
 }
 
 type ExcludedChannelDB struct {
-	db *database.Database
+	db store
 }
 
 func (m *ExcludedChannelDB) GetSelected(guildID string) ([]string, error) {
@@ -468,7 +468,7 @@ func (m *ExcludedChannelDB) Add(guildID, itemID string) error {
 }
 
 type ModRoleDB struct {
-	db *database.Database
+	db store
 }
 
 func (r *ModRoleDB) GetSelected(guildID string) ([]string, error) {
@@ -484,7 +484,7 @@ func (r *ModRoleDB) Add(guildID, itemID string) error {
 }
 
 type AutomodSettingsDB struct {
-	db *database.Database
+	db store
 }
 
 func (a *AutomodSettingsDB) GetSelected(guildID string) ([]string, error) {
@@ -536,7 +536,7 @@ func (a *AutomodSettingsDB) Add(guildID, itemID string) error {
 	return a.db.SetAutomoderationSettings(guildID, settings)
 }
 
-func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interaction, title, description string) {
+func (d *Discord) sendErrorMessage(s discordClient, i *discordgo.Interaction, title, description string) {
 	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{{
 			Title:       title,
@@ -547,7 +547,7 @@ func (d *Discord) sendErrorMessage(s *discordgo.Session, i *discordgo.Interactio
 	})
 }
 
-func (d *Discord) getTextChannels(s *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
+func (d *Discord) getTextChannels(s discordClient, guildID string) ([]*discordgo.Channel, error) {
 	channels, err := s.GuildChannels(guildID)
 	if err != nil {
 		return nil, err
@@ -568,7 +568,7 @@ func (d *Discord) getTextChannels(s *discordgo.Session, guildID string) ([]*disc
 	return textChannels, nil
 }
 
-func (d *Discord) getRoles(s *discordgo.Session, guildID string) ([]*discordgo.Role, error) {
+func (d *Discord) getRoles(s discordClient, guildID string) ([]*discordgo.Role, error) {
 	roles, err := s.GuildRoles(guildID)
 	if err != nil {
 		return nil, err
@@ -583,7 +583,7 @@ func (d *Discord) getRoles(s *discordgo.Session, guildID string) ([]*discordgo.R
 }
 
 // Helper functions to convert channels and roles to SelectionItems
-func (d *Discord) getTextChannelsAsItems(s *discordgo.Session, guildID string) ([]SelectionItem, error) {
+func (d *Discord) getTextChannelsAsItems(s discordClient, guildID string) ([]SelectionItem, error) {
 	channels, err := d.getTextChannels(s, guildID)
 	if err != nil {
 		return nil, err
@@ -596,7 +596,7 @@ func (d *Discord) getTextChannelsAsItems(s *discordgo.Session, guildID string) (
 	return items, nil
 }
 
-func (d *Discord) getRolesAsItems(s *discordgo.Session, guildID string) ([]SelectionItem, error) {
+func (d *Discord) getRolesAsItems(s discordClient, guildID string) ([]SelectionItem, error) {
 	roles, err := d.getRoles(s, guildID)
 	if err != nil {
 		return nil, err

@@ -5,12 +5,12 @@ import (
 )
 
 type DiscordSettingsFunctionInterface interface {
-	selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
-	selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate)
-	selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate)
+	selectLogChannels(s discordClient, i *discordgo.InteractionCreate)
+	selectModeratorChannels(s discordClient, i *discordgo.InteractionCreate)
+	selectModeratorRoles(s discordClient, i *discordgo.InteractionCreate)
 }
 
-func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) selectLogChannels(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "selectLogChannels()") {
 		return
 	}
@@ -25,7 +25,7 @@ func (d *Discord) selectLogChannels(s *discordgo.Session, i *discordgo.Interacti
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
-func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) selectModeratorChannels(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "selectModeratorChannels()") {
 		return
 	}
@@ -40,7 +40,7 @@ func (d *Discord) selectModeratorChannels(s *discordgo.Session, i *discordgo.Int
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
-func (d *Discord) selectExcludedChannels(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) selectExcludedChannels(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "selectExcludedChannels()") {
 		return
 	}
@@ -55,7 +55,7 @@ func (d *Discord) selectExcludedChannels(s *discordgo.Session, i *discordgo.Inte
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
-func (d *Discord) selectModeratorRoles(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) selectModeratorRoles(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "selectModeratorRoles()") {
 		return
 	}

@@ -5,15 +5,22 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
+// InteractionResponder is the slice of *discordgo.Session that the permission
+// check needs: sending the "no permission" follow-up. Depending on this
+// interface instead of the concrete session lets callers pass a fake in tests.
+type InteractionResponder interface {
+	FollowupMessageCreate(interaction *discordgo.Interaction, wait bool, data *discordgo.WebhookParams, options ...discordgo.RequestOption) (*discordgo.Message, error)
+}
+
 type HelperInterface interface {
-	CheckModerationPermissionOnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) bool
+	CheckModerationPermissionOnInteraction(s InteractionResponder, i *discordgo.InteractionCreate) bool
 	UserHasModerationRole(guildID string, member *discordgo.Member) bool
 }
 
 // CheckModerationPermissionOnInteraction checks if the user has admin permissions based on roles set in the database
 //
 //	It sends a follow-up message if the user lacks permissions and returns false.
-func (d *Database) CheckModerationPermissionOnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+func (d *Database) CheckModerationPermissionOnInteraction(s InteractionResponder, i *discordgo.InteractionCreate) bool {
 	if !d.UserHasModerationRole(i.GuildID, i.Member) {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{{

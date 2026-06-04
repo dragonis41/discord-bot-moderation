@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/internal/database"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
@@ -83,7 +84,7 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 //	It is used to call the various moderation checks.
 //
 //	It ignores messages from moderators and messages sent in excluded channels. The checks are here because we still want to update the cache for those messages.
-func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
+func (d *Discord) moderateMessage(s discordSender, m *discordgo.Message) {
 	// Safety check: ensure database is available
 	if d.db == nil {
 		return
@@ -116,6 +117,40 @@ func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
 // once at package load instead of on every message.
 var websiteURLPattern = regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}(?:/[^\s]*)?`)
 
+// Pure matching helpers ------------------------------------------------------
+//
+// These hold the actual content-rule logic, free of any database or Discord
+// dependency, so they can be unit-tested directly. The check* methods below
+// fetch data and apply escalation; these decide whether a message matches.
+
+// bannedWordMatches reports whether content contains the given banned word.
+// Matching is case-insensitive and only triggers when the word is bounded by the
+// start/end of the message, whitespace or punctuation. Literal words are escaped;
+// patterns flagged as regex are used as-is, so an invalid pattern returns an
+// error for the caller to log.
+func bannedWordMatches(content string, w database.BannedWord) (bool, error) {
+	word := w.WordPattern
+	if !w.IsRegex {
+		word = regexp.QuoteMeta(w.WordPattern)
+	}
+	pattern := fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
+	return regexp.MatchString(pattern, strings.ToLower(content))
+}
+
+// bannedWebsiteMatches reports whether content mentions the banned website. The
+// comparison is a case-insensitive substring match, matching the original
+// behavior.
+func bannedWebsiteMatches(content string, w database.BannedWebsite) bool {
+	return strings.Contains(strings.ToLower(content), strings.ToLower(w.WebsiteURL))
+}
+
+// containsURL reports whether content contains anything that looks like a URL or
+// bare domain. It is a cheap gate so the banned-website list is only scanned for
+// messages that actually carry a link.
+func containsURL(content string) bool {
+	return websiteURLPattern.MatchString(content)
+}
+
 // escalateContentViolation applies the shared warn → delete → ban escalation
 // used whenever a message breaks a content rule (a banned word or website).
 //
@@ -127,7 +162,7 @@ var websiteURLPattern = regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?([a-zA-Z
 //	cause completes the sentence "...a été supprimé car {cause}", ruleReason is
 //	the reason logged/sent for the action, and logSubject describes the match in
 //	the internal info log.
-func (d *Discord) escalateContentViolation(s *discordgo.Session, m *discordgo.Message, checkName, cause, ruleReason, logSubject string) bool {
+func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message, checkName, cause, ruleReason, logSubject string) bool {
 	// Skip if the user is already being banned by a concurrent handler.
 	if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
 		return true
@@ -170,7 +205,7 @@ func (d *Discord) escalateContentViolation(s *discordgo.Session, m *discordgo.Me
 //	The check is case-insensitive and matches whole words / sentences.
 //	It supports both literal words and regex patterns.
 //	It also triggers if the word / sentence is surrounded by whitespace or punctuation.
-func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) bool {
+func (d *Discord) checkBannedWords(s discordSender, m *discordgo.Message) bool {
 	// Check if banned words feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
@@ -191,17 +226,8 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 		return false
 	}
 
-	messageLower := strings.ToLower(m.Content)
-
 	for _, bannedWord := range bannedWords {
-		// Match the word only when bounded by start/end of string, whitespace or
-		// punctuation. Literal words are escaped; regex patterns are used as-is.
-		word := bannedWord.WordPattern
-		if !bannedWord.IsRegex {
-			word = regexp.QuoteMeta(bannedWord.WordPattern)
-		}
-		pattern := fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
-		matched, err := regexp.MatchString(pattern, messageLower)
+		matched, err := bannedWordMatches(m.Content, bannedWord)
 		if err != nil {
 			d.logError(m.GuildID, "checkBannedWords()", "Regex error for word '%s': %s", bannedWord.WordPattern, err)
 			continue
@@ -222,7 +248,7 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 //
 //	The check extracts URLs from the message and compares them against the banned websites list.
 //	It matches if the URL contains the banned website pattern.
-func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message) bool {
+func (d *Discord) checkBannedWebsites(s discordSender, m *discordgo.Message) bool {
 	// Check if banned websites feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
@@ -244,13 +270,12 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 	}
 
 	// Skip messages that contain no URL-like token at all.
-	if len(websiteURLPattern.FindAllString(m.Content, -1)) == 0 {
+	if !containsURL(m.Content) {
 		return false
 	}
 
-	messageLower := strings.ToLower(m.Content)
 	for _, bannedWebsite := range bannedWebsites {
-		if strings.Contains(messageLower, strings.ToLower(bannedWebsite.WebsiteURL)) {
+		if bannedWebsiteMatches(m.Content, bannedWebsite) {
 			return d.escalateContentViolation(s, m, "banned_website_check",
 				fmt.Sprintf("il contient un lien interdit : `%s`", bannedWebsite.WebsiteURL),
 				fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL),
@@ -262,7 +287,7 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 }
 
 // checkMessageSpam detects if a user is sending the exact same message repeatedly across multiple channels
-func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) bool {
+func (d *Discord) checkMessageSpam(s discordSender, m *discordgo.Message) bool {
 	// Check if spam detection feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {

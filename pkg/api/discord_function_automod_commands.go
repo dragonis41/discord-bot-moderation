@@ -8,19 +8,19 @@ import (
 )
 
 type DiscordAutomodCommandsInterface interface {
-	addBannedWord(s *discordgo.Session, i *discordgo.InteractionCreate)
-	removeBannedWord(s *discordgo.Session, i *discordgo.InteractionCreate)
-	listBannedWords(s *discordgo.Session, i *discordgo.InteractionCreate)
-	addBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate)
-	removeBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate)
-	listBannedWebsites(s *discordgo.Session, i *discordgo.InteractionCreate)
-	configureAutomod(s *discordgo.Session, i *discordgo.InteractionCreate)
+	addBannedWord(s discordClient, i *discordgo.InteractionCreate)
+	removeBannedWord(s discordClient, i *discordgo.InteractionCreate)
+	listBannedWords(s discordClient, i *discordgo.InteractionCreate)
+	addBannedWebsite(s discordClient, i *discordgo.InteractionCreate)
+	removeBannedWebsite(s discordClient, i *discordgo.InteractionCreate)
+	listBannedWebsites(s discordClient, i *discordgo.InteractionCreate)
+	configureAutomod(s discordClient, i *discordgo.InteractionCreate)
 }
 
 // maxEmbedDescriptionLength is Discord's hard limit on an embed description.
 const maxEmbedDescriptionLength = 4096
 
-func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) addBannedWord(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "addBannedWord()") {
 		return
 	}
@@ -56,7 +56,7 @@ func (d *Discord) addBannedWord(s *discordgo.Session, i *discordgo.InteractionCr
 		fmt.Sprintf("Le mot `%s` (type: %s) a été ajouté à la liste des mots interdits.", wordPattern, wordType)))
 }
 
-func (d *Discord) removeBannedWord(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) removeBannedWord(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "removeBannedWord()") {
 		return
 	}
@@ -83,7 +83,7 @@ func (d *Discord) removeBannedWord(s *discordgo.Session, i *discordgo.Interactio
 		fmt.Sprintf("Le mot avec l'ID `%d` a été supprimé de la liste des mots interdits.", wordID)))
 }
 
-func (d *Discord) listBannedWords(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) listBannedWords(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "listBannedWords()") {
 		return
 	}
@@ -113,7 +113,7 @@ func (d *Discord) listBannedWords(s *discordgo.Session, i *discordgo.Interaction
 	d.followup(s, i, "listBannedWords()", infoEmbed("📝 Liste des mots interdits", truncate(description, maxEmbedDescriptionLength)))
 }
 
-func (d *Discord) addBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) addBannedWebsite(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "addBannedWebsite()") {
 		return
 	}
@@ -140,7 +140,7 @@ func (d *Discord) addBannedWebsite(s *discordgo.Session, i *discordgo.Interactio
 		fmt.Sprintf("Le site `%s` a été ajouté à la liste des sites web interdits.", websiteURL)))
 }
 
-func (d *Discord) removeBannedWebsite(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) removeBannedWebsite(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "removeBannedWebsite()") {
 		return
 	}
@@ -167,7 +167,7 @@ func (d *Discord) removeBannedWebsite(s *discordgo.Session, i *discordgo.Interac
 		fmt.Sprintf("Le site avec l'ID `%d` a été supprimé de la liste des sites web interdits.", websiteID)))
 }
 
-func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) listBannedWebsites(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "listBannedWebsites()") {
 		return
 	}
@@ -193,7 +193,7 @@ func (d *Discord) listBannedWebsites(s *discordgo.Session, i *discordgo.Interact
 	d.followup(s, i, "listBannedWebsites()", infoEmbed("🌐 Liste des sites web interdits", truncate(description, maxEmbedDescriptionLength)))
 }
 
-func (d *Discord) configureAutomod(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) configureAutomod(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "configureAutomod()") {
 		return
 	}

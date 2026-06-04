@@ -12,12 +12,12 @@ type DiscordUtilsInterface interface {
 	displayConnectedGuilds()
 	setMaxLogRetention()
 	checkForGuildSetup()
-	sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string)
-	sendLogChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed)
-	sendModChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed)
+	sendPrivateMessage(s discordSender, m *discordgo.Message, message string)
+	sendLogChannelsEmbed(s discordSender, guildID string, embed *discordgo.MessageEmbed)
+	sendModChannelsEmbed(s discordSender, guildID string, embed *discordgo.MessageEmbed)
 	getUserRecentMessagesString(guildID string, user *discordgo.User, limit int) string
-	logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string)
-	takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string)
+	logAutomoderationAction(s discordSender, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string)
+	takeAutomoderationAction(s discordSender, m *discordgo.Message, action model.ModerationLogAction, reason string)
 }
 
 func (d *Discord) displayConnectedGuilds() {
@@ -155,17 +155,17 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 	return messagesText
 }
 
-func (d *Discord) sendPrivateMessage(s *discordgo.Session, m *discordgo.Message, message string) {
+func (d *Discord) sendPrivateMessage(s discordSender, m *discordgo.Message, message string) {
 	d.sendDM(s, m.GuildID, m.Author.ID, "sendPrivateMessage()", message)
 }
 
-func (d *Discord) sendPrivateMessageOnInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, user *discordgo.User, message string) {
+func (d *Discord) sendPrivateMessageOnInteraction(s discordSender, i *discordgo.InteractionCreate, user *discordgo.User, message string) {
 	d.sendDM(s, i.GuildID, user.ID, "sendPrivateMessageOnInteraction()", message)
 }
 
 // sendDM opens (or reuses) a DM channel with the user and sends a message,
 // logging any failure under function.
-func (d *Discord) sendDM(s *discordgo.Session, guildID, userID, function, message string) {
+func (d *Discord) sendDM(s discordSender, guildID, userID, function, message string) {
 	channel, err := s.UserChannelCreate(userID)
 	if err != nil {
 		d.logError(guildID, function, "Failed to create DM channel: %s", err)
@@ -176,7 +176,7 @@ func (d *Discord) sendDM(s *discordgo.Session, guildID, userID, function, messag
 	}
 }
 
-func (d *Discord) sendLogChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+func (d *Discord) sendLogChannelsEmbed(s discordSender, guildID string, embed *discordgo.MessageEmbed) {
 	logChannels, err := d.db.GetLogChannelsByGuildId(guildID)
 	if err != nil {
 		d.logError(guildID, "sendLogChannelsEmbed()", "Failed to fetch log channels: %s", err)
@@ -190,7 +190,7 @@ func (d *Discord) sendLogChannelsEmbed(s *discordgo.Session, guildID string, emb
 	}
 }
 
-func (d *Discord) sendModChannelsEmbed(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
+func (d *Discord) sendModChannelsEmbed(s discordSender, guildID string, embed *discordgo.MessageEmbed) {
 	modChannels, err := d.db.GetModerationChannelsByGuildId(guildID)
 	if err != nil {
 		d.logError(guildID, "sendModChannelsEmbed()", "Failed to fetch moderation channels: %s", err)
@@ -205,7 +205,7 @@ func (d *Discord) sendModChannelsEmbed(s *discordgo.Session, guildID string, emb
 }
 
 // logAutomoderationAction sends an alert to moderators and save it in DB
-func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string) {
+func (d *Discord) logAutomoderationAction(s discordSender, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string) {
 	// Log in the database
 	if err := d.db.AddModerationLogEntry(m.GuildID, action, m.Author.ID, m.Author.Username, trigger, reason); err != nil {
 		d.logError(m.GuildID, "logAutomoderationAction()", "Error logging automod action to database: %s", err)
@@ -235,7 +235,7 @@ func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Mes
 	d.sendLogChannelsEmbed(s, m.GuildID, embed)
 }
 
-func (d *Discord) takeAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, reason string) {
+func (d *Discord) takeAutomoderationAction(s discordSender, m *discordgo.Message, action model.ModerationLogAction, reason string) {
 	guildName := guildNameByID(s, m.GuildID)
 
 	switch action {
