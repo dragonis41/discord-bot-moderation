@@ -104,7 +104,7 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 	for idx, msg := range recentMessages {
 		content := msg.Content
 
-		// Handle messages with attachments but no text
+		// Handle messages with attachments, stickers or embeds but no text
 		if content == "" {
 			if msg.AttachmentCount > 0 && msg.HasEmbeds {
 				content = fmt.Sprintf("<fichier(s): %d + embed(s)>", msg.AttachmentCount)
@@ -116,6 +116,12 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 				}
 			} else if msg.HasEmbeds {
 				content = "<embed>"
+			} else if len(msg.Stickers) > 0 {
+				if len(msg.Stickers) == 1 {
+					content = "<sticker>"
+				} else {
+					content = fmt.Sprintf("<%d stickers>", len(msg.Stickers))
+				}
 			} else {
 				content = "<message vide>"
 			}
