@@ -55,12 +55,27 @@ func TestBannedWordsCRUD(t *testing.T) {
 
 	// Remove one by ID.
 	target := words[0]
-	if err := d.RemoveBannedWord("g1", target.ID); err != nil {
+	removed, err := d.RemoveBannedWord("g1", target.ID)
+	if err != nil {
 		t.Fatalf("RemoveBannedWord: %v", err)
+	}
+	if !removed {
+		t.Error("RemoveBannedWord should report a deletion for an existing id")
 	}
 	words, _ = d.GetBannedWordsByGuildId("g1")
 	if len(words) != 1 {
 		t.Fatalf("expected 1 word after removal, got %d", len(words))
+	}
+
+	// Removing g2's id from g1 must delete nothing and report false rather than
+	// a false success.
+	g2Word, _ := d.GetBannedWordsByGuildId("g2")
+	removed, err = d.RemoveBannedWord("g1", g2Word[0].ID)
+	if err != nil {
+		t.Fatalf("RemoveBannedWord (cross-guild): %v", err)
+	}
+	if removed {
+		t.Error("RemoveBannedWord must not delete another guild's word")
 	}
 
 	// Remove all for guild.
@@ -97,12 +112,25 @@ func TestBannedWebsitesCRUD(t *testing.T) {
 		t.Fatalf("expected 2 banned websites, got %d", len(sites))
 	}
 
-	if err := d.RemoveBannedWebsite("g1", sites[0].ID); err != nil {
+	removed, err := d.RemoveBannedWebsite("g1", sites[0].ID)
+	if err != nil {
 		t.Fatalf("RemoveBannedWebsite: %v", err)
+	}
+	if !removed {
+		t.Error("RemoveBannedWebsite should report a deletion for an existing id")
 	}
 	sites, _ = d.GetBannedWebsitesByGuildId("g1")
 	if len(sites) != 1 {
 		t.Fatalf("expected 1 website after removal, got %d", len(sites))
+	}
+
+	// A non-existent id must report false rather than a false success.
+	removed, err = d.RemoveBannedWebsite("g1", 999999)
+	if err != nil {
+		t.Fatalf("RemoveBannedWebsite (missing): %v", err)
+	}
+	if removed {
+		t.Error("RemoveBannedWebsite must report false for a non-existent id")
 	}
 
 	if err := d.RemoveBannedWebsitesByGuild("g1"); err != nil {

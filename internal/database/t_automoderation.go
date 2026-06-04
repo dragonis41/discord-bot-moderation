@@ -10,13 +10,13 @@ import (
 type AutomoderationInterface interface {
 	// Banned Words
 	AddBannedWord(guildID, wordPattern string, isRegex bool) error
-	RemoveBannedWord(guildID string, id int) error
+	RemoveBannedWord(guildID string, id int) (bool, error)
 	RemoveBannedWordsByGuild(guildID string) error
 	GetBannedWordsByGuildId(guildID string) ([]BannedWord, error)
 
 	// Banned Websites
 	AddBannedWebsite(guildID, websiteURL string) error
-	RemoveBannedWebsite(guildID string, id int) error
+	RemoveBannedWebsite(guildID string, id int) (bool, error)
 	RemoveBannedWebsitesByGuild(guildID string) error
 	GetBannedWebsitesByGuildId(guildID string) ([]BannedWebsite, error)
 
@@ -135,18 +135,27 @@ func (d *Database) AddBannedWord(guildID, wordPattern string, isRegex bool) erro
 	return nil
 }
 
-func (d *Database) RemoveBannedWord(guildID string, id int) error {
+// RemoveBannedWord deletes the word with the given id, scoped to guildID so an
+// id belonging to another guild never matches. It reports whether a row was
+// actually deleted: false means no such word exists for this guild (e.g. a stale
+// or cross-guild id), which the caller surfaces instead of a false success.
+func (d *Database) RemoveBannedWord(guildID string, id int) (bool, error) {
 	deleteQuery := `
 	DELETE FROM banned_words
 	WHERE guild_id = ? AND id = ?;
 	`
 
-	_, err := d.db.Exec(deleteQuery, guildID, id)
+	res, err := d.db.Exec(deleteQuery, guildID, id)
 	if err != nil {
-		return fmt.Errorf("failed to remove banned word: %w", err)
+		return false, fmt.Errorf("failed to remove banned word: %w", err)
 	}
 
-	return nil
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read affected rows: %w", err)
+	}
+
+	return rows > 0, nil
 }
 
 func (d *Database) RemoveBannedWordsByGuild(guildID string) error {
@@ -218,18 +227,26 @@ func (d *Database) AddBannedWebsite(guildID, websiteURL string) error {
 	return nil
 }
 
-func (d *Database) RemoveBannedWebsite(guildID string, id int) error {
+// RemoveBannedWebsite deletes the website with the given id, scoped to guildID
+// so an id belonging to another guild never matches. It reports whether a row
+// was actually deleted: false means no such website exists for this guild.
+func (d *Database) RemoveBannedWebsite(guildID string, id int) (bool, error) {
 	deleteQuery := `
 	DELETE FROM banned_websites
 	WHERE guild_id = ? AND id = ?;
 	`
 
-	_, err := d.db.Exec(deleteQuery, guildID, id)
+	res, err := d.db.Exec(deleteQuery, guildID, id)
 	if err != nil {
-		return fmt.Errorf("failed to remove banned website: %w", err)
+		return false, fmt.Errorf("failed to remove banned website: %w", err)
 	}
 
-	return nil
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read affected rows: %w", err)
+	}
+
+	return rows > 0, nil
 }
 
 func (d *Database) RemoveBannedWebsitesByGuild(guildID string) error {

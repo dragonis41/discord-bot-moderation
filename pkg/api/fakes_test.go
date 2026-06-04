@@ -113,9 +113,9 @@ func (f *fakeStore) AddBannedWord(_, wordPattern string, isRegex bool) error {
 	return nil
 }
 
-func (f *fakeStore) RemoveBannedWord(_ string, id int) error {
+func (f *fakeStore) RemoveBannedWord(_ string, id int) (bool, error) {
 	f.removedWords = append(f.removedWords, id)
-	return nil
+	return true, nil
 }
 
 func (f *fakeStore) AddBannedWebsite(_, websiteURL string) error {
@@ -123,9 +123,9 @@ func (f *fakeStore) AddBannedWebsite(_, websiteURL string) error {
 	return nil
 }
 
-func (f *fakeStore) RemoveBannedWebsite(_ string, id int) error {
+func (f *fakeStore) RemoveBannedWebsite(_ string, id int) (bool, error) {
 	f.removedWebsites = append(f.removedWebsites, id)
-	return nil
+	return true, nil
 }
 
 func (f *fakeStore) UserHasModerationRole(string, *discordgo.Member) bool {
@@ -332,14 +332,6 @@ func strOpt(name, value string) *discordgo.ApplicationCommandInteractionDataOpti
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionString,
 		Value: value,
-	}
-}
-
-func intOpt(name string, value int) *discordgo.ApplicationCommandInteractionDataOption {
-	return &discordgo.ApplicationCommandInteractionDataOption{
-		Name:  name,
-		Type:  discordgo.ApplicationCommandOptionInteger,
-		Value: float64(value), // discordgo decodes JSON numbers as float64
 	}
 }
 

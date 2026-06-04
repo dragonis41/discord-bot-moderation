@@ -91,15 +91,17 @@ func (d *Discord) RunDiscordBot() {
 	d.client.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentGuildMembers | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	// add an event handler for slash commands
-	d.client.AddHandler(d.slashCommandHandler)            // Handler for slash commands
-	d.client.AddHandler(d.handleLogChannelSelection)      // Handler for message component interaction for log channel selection
-	d.client.AddHandler(d.handleModChannelSelection)      // Handler for message component interaction for moderation channel selection
-	d.client.AddHandler(d.handleExcludedChannelSelection) // Handler for message component interaction for excluded channel selection
-	d.client.AddHandler(d.handleModRoleSelection)         // Handler for message component interaction for role selection
-	d.client.AddHandler(d.handleAutomoderationSettings)   // Handler for automoderation settings selection
-	d.client.AddHandler(d.messageCreateHandler)           // Handler for message creation events
-	d.client.AddHandler(d.messageUpdateHandler)           // Handler for message update events
-	d.client.AddHandler(d.handleReportActions)            // Handler for report action buttons (kick/ban)
+	d.client.AddHandler(d.slashCommandHandler)                // Handler for slash commands
+	d.client.AddHandler(d.handleLogChannelSelection)          // Handler for message component interaction for log channel selection
+	d.client.AddHandler(d.handleModChannelSelection)          // Handler for message component interaction for moderation channel selection
+	d.client.AddHandler(d.handleExcludedChannelSelection)     // Handler for message component interaction for excluded channel selection
+	d.client.AddHandler(d.handleModRoleSelection)             // Handler for message component interaction for role selection
+	d.client.AddHandler(d.handleAutomoderationSettings)       // Handler for automoderation settings selection
+	d.client.AddHandler(d.handleRemoveBannedWordSelection)    // Handler for the banned-word removal dropdown
+	d.client.AddHandler(d.handleRemoveBannedWebsiteSelection) // Handler for the banned-website removal dropdown
+	d.client.AddHandler(d.messageCreateHandler)               // Handler for message creation events
+	d.client.AddHandler(d.messageUpdateHandler)               // Handler for message update events
+	d.client.AddHandler(d.handleReportActions)                // Handler for report action buttons (kick/ban)
 
 	// open session
 	err := d.client.Open()
@@ -232,15 +234,7 @@ func (d *Discord) registerSlashCommands() {
 		},
 		{
 			Name:        "remove-banned-word",
-			Description: "Supprime un mot de la liste des mots interdits",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionInteger,
-					Name:        "id",
-					Description: "L'ID du mot à supprimer (utilisez /list-banned-words pour voir les IDs)",
-					Required:    true,
-				},
-			},
+			Description: "Supprime un ou plusieurs mots de la liste des mots interdits",
 		},
 		{
 			Name:        "add-banned-website",
@@ -260,15 +254,7 @@ func (d *Discord) registerSlashCommands() {
 		},
 		{
 			Name:        "remove-banned-website",
-			Description: "Supprime un site web de la liste des sites interdits",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionInteger,
-					Name:        "id",
-					Description: "L'ID du site à supprimer (utilisez /list-banned-websites pour voir les IDs)",
-					Required:    true,
-				},
-			},
+			Description: "Supprime un ou plusieurs sites web de la liste des sites interdits",
 		},
 		{
 			Name:        "configure-automod",

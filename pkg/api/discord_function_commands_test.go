@@ -56,27 +56,70 @@ func TestAddBannedWordCommandPermissionDenied(t *testing.T) {
 	}
 }
 
-func TestRemoveBannedWordCommand(t *testing.T) {
+func TestRemoveBannedWordCommandShowsMenu(t *testing.T) {
+	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
+	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.removeBannedWord(fake, modInteraction("remove-banned-word"))
+
+	if len(fake.followups) != 1 {
+		t.Fatalf("expected 1 follow-up, got %d", len(fake.followups))
+	}
+	if len(fake.followups[0].Components) == 0 {
+		t.Error("the removal menu should include a dropdown component")
+	}
+	if len(fs.removedWords) != 0 {
+		t.Error("opening the menu must not delete anything yet")
+	}
+}
+
+func TestRemoveBannedWordCommandEmpty(t *testing.T) {
 	fs := &fakeStore{}
 	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
 	fake := &fakeSender{}
 
-	d.removeBannedWord(fake, modInteraction("remove-banned-word", intOpt("id", 7)))
+	d.removeBannedWord(fake, modInteraction("remove-banned-word"))
+
+	if len(fake.followups) != 1 {
+		t.Fatalf("expected 1 follow-up, got %d", len(fake.followups))
+	}
+	if len(fake.followups[0].Components) != 0 {
+		t.Error("an empty list must not show a dropdown")
+	}
+	if !strings.Contains(fake.followups[0].Embeds[0].Description, "Aucun") {
+		t.Error("empty list should show the 'none configured' message")
+	}
+}
+
+func TestRemoveBannedWordSelectionDeletes(t *testing.T) {
+	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
+	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(), "test")
 
 	if len(fs.removedWords) != 1 || fs.removedWords[0] != 7 {
 		t.Errorf("removedWords = %v, want [7]", fs.removedWords)
 	}
+	if fake.responds != 1 {
+		t.Errorf("expected the menu to be refreshed once, got %d responses", fake.responds)
+	}
 }
 
-func TestRemoveBannedWordCommandRejectsZeroID(t *testing.T) {
-	fs := &fakeStore{}
+func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
+	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
 	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
 	fake := &fakeSender{}
 
-	d.removeBannedWord(fake, modInteraction("remove-banned-word", intOpt("id", 0)))
+	// A component belonging to a different selector must be left alone.
+	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "7"), d.bannedWordRemoveSelector(), "test")
 
 	if len(fs.removedWords) != 0 {
-		t.Error("id 0 should be rejected")
+		t.Errorf("unrelated component must not delete words, got %v", fs.removedWords)
+	}
+	if fake.responds != 0 {
+		t.Errorf("unrelated component must not be answered, got %d", fake.responds)
 	}
 }
 
@@ -125,15 +168,33 @@ func TestAddBannedWebsiteCommand(t *testing.T) {
 	}
 }
 
-func TestRemoveBannedWebsiteCommand(t *testing.T) {
-	fs := &fakeStore{}
+func TestRemoveBannedWebsiteCommandShowsMenu(t *testing.T) {
+	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{ID: 3, WebsiteURL: "evil.com"}}}
 	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
 	fake := &fakeSender{}
 
-	d.removeBannedWebsite(fake, modInteraction("remove-banned-website", intOpt("id", 3)))
+	d.removeBannedWebsite(fake, modInteraction("remove-banned-website"))
+
+	if len(fake.followups) != 1 {
+		t.Fatalf("expected 1 follow-up, got %d", len(fake.followups))
+	}
+	if len(fake.followups[0].Components) == 0 {
+		t.Error("the removal menu should include a dropdown component")
+	}
+}
+
+func TestRemoveBannedWebsiteSelectionDeletes(t *testing.T) {
+	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{ID: 3, WebsiteURL: "evil.com"}}}
+	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "3"), d.bannedWebsiteRemoveSelector(), "test")
 
 	if len(fs.removedWebsites) != 1 || fs.removedWebsites[0] != 3 {
 		t.Errorf("removedWebsites = %v, want [3]", fs.removedWebsites)
+	}
+	if fake.responds != 1 {
+		t.Errorf("expected the menu to be refreshed once, got %d responses", fake.responds)
 	}
 }
 

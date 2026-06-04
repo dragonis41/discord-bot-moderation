@@ -56,31 +56,16 @@ func (d *Discord) addBannedWord(s discordClient, i *discordgo.InteractionCreate)
 		fmt.Sprintf("Le mot `%s` (type: %s) a été ajouté à la liste des mots interdits.", wordPattern, wordType)))
 }
 
+// removeBannedWord opens a paginated dropdown of the guild's banned words so the
+// moderator picks the entries to delete, instead of typing a raw id (which let
+// users target another guild's ids and silently no-op). See the removal-selector
+// framework in discord_remove_selector.go.
 func (d *Discord) removeBannedWord(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "removeBannedWord()") {
 		return
 	}
 
-	wordID := int64(0)
-	for _, option := range i.ApplicationCommandData().Options {
-		if option.Name == "id" {
-			wordID = option.IntValue()
-		}
-	}
-
-	if wordID == 0 {
-		d.followup(s, i, "removeBannedWord()", errorEmbed("Mot interdit", "L'ID du mot est requis."))
-		return
-	}
-
-	if err := d.db.RemoveBannedWord(i.GuildID, int(wordID)); err != nil {
-		d.logError(i.GuildID, "removeBannedWord()", "Error removing banned word from database: %s", err)
-		d.followup(s, i, "removeBannedWord()", errorEmbed("Mot interdit", "Une erreur est survenue lors de la suppression du mot interdit."))
-		return
-	}
-
-	d.followup(s, i, "removeBannedWord()", successEmbed("✅ Mot interdit supprimé",
-		fmt.Sprintf("Le mot avec l'ID `%d` a été supprimé de la liste des mots interdits.", wordID)))
+	d.startRemoveSelection(s, i, d.bannedWordRemoveSelector(), "removeBannedWord()")
 }
 
 func (d *Discord) listBannedWords(s discordClient, i *discordgo.InteractionCreate) {
@@ -140,31 +125,14 @@ func (d *Discord) addBannedWebsite(s discordClient, i *discordgo.InteractionCrea
 		fmt.Sprintf("Le site `%s` a été ajouté à la liste des sites web interdits.", websiteURL)))
 }
 
+// removeBannedWebsite opens a paginated dropdown of the guild's banned websites
+// so the moderator picks the entries to delete, mirroring removeBannedWord.
 func (d *Discord) removeBannedWebsite(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "removeBannedWebsite()") {
 		return
 	}
 
-	websiteID := int64(0)
-	for _, option := range i.ApplicationCommandData().Options {
-		if option.Name == "id" {
-			websiteID = option.IntValue()
-		}
-	}
-
-	if websiteID == 0 {
-		d.followup(s, i, "removeBannedWebsite()", errorEmbed("Site web interdit", "L'ID du site est requis."))
-		return
-	}
-
-	if err := d.db.RemoveBannedWebsite(i.GuildID, int(websiteID)); err != nil {
-		d.logError(i.GuildID, "removeBannedWebsite()", "Error removing banned website from database: %s", err)
-		d.followup(s, i, "removeBannedWebsite()", errorEmbed("Site web interdit", "Une erreur est survenue lors de la suppression du site web interdit."))
-		return
-	}
-
-	d.followup(s, i, "removeBannedWebsite()", successEmbed("✅ Site web interdit supprimé",
-		fmt.Sprintf("Le site avec l'ID `%d` a été supprimé de la liste des sites web interdits.", websiteID)))
+	d.startRemoveSelection(s, i, d.bannedWebsiteRemoveSelector(), "removeBannedWebsite()")
 }
 
 func (d *Discord) listBannedWebsites(s discordClient, i *discordgo.InteractionCreate) {
