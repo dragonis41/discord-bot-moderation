@@ -17,6 +17,12 @@ type DiscordAdminFunctionInterface interface {
 	getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
+// logDisplayLimit is how many recent log entries /get-bot-logs and
+// /get-moderation-logs fetch. It is generous on purpose: the renderer fills the
+// embed description up to Discord's limit and stops, so this just needs to be
+// large enough to fill that space.
+const logDisplayLimit = 50
+
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "showStatus()") {
 		return
@@ -211,7 +217,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	entries, _ := d.db.GetSystemLogEntriesByGuild(i.GuildID, 10)
+	entries, _ := d.db.GetSystemLogEntriesByGuild(i.GuildID, logDisplayLimit)
 	var lines []string
 	for _, entry := range entries {
 		lines = append(lines, fmt.Sprintf("----------------------------------------\n- [%s] `%s` : \n`%s`\n",
@@ -240,38 +246,40 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
-	entries, _ := d.db.GetModerationLogEntriesByGuild(i.GuildID, 10)
+	entries, _ := d.db.GetModerationLogEntriesByGuild(i.GuildID, logDisplayLimit)
 	var lines []string
 	for _, entry := range entries {
-		lines = append(lines, fmt.Sprintf("----------------------------------------\n- [%s] Action : `%s` <@%s> (ID: %s) : \n`%s`\n",
-			formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.UserID, entry.Reason))
+
+		lines = append(lines, fmt.Sprintf("----------------------------------------\n- [%s] Action : `%s` <@%s> (%s | %s) : \n`%s`\n",
+			formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.Username, entry.UserID, entry.Reason))
 	}
 
 	d.followupLogEmbed(s, i, "getModerationLogs()", "Logs de modération", nbEntries, maxEntries, lines, "Aucun log de modération trouvé.")
 }
 
-// followupLogEmbed sends the standard log-listing embed: a green embed with a
-// single "10 derniers logs" field showing count/max followed by the log lines,
-// trimmed to stay below Discord's per-field length limit. emptyMessage is shown
+// followupLogEmbed sends the standard log-listing embed: a green embed whose
+// description shows count/max followed by as many log lines as fit. The list is
+// rendered into the embed description (4096 chars) rather than a field (1024),
+// so it holds roughly four times more before truncating. emptyMessage is shown
 // when there are no log lines.
 func (d *Discord) followupLogEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, function, title string, count, max int, lines []string, emptyMessage string) {
-	const maxFieldLength = 950 // Leave some margin below Discord's 1024 field limit
+	// Reserve a little room for the "count/max" header so the joined log lines
+	// can use the rest of the 4096-char description budget.
+	const headerMargin = 96
 
 	body := emptyMessage
 	if len(lines) > 0 {
-		body = joinLinesWithLimit(lines, maxFieldLength)
+		body = joinLinesWithLimit(lines, maxEmbedDescriptionLength-headerMargin)
 	}
 
+	description := truncate(fmt.Sprintf("**Derniers logs** (%d/%d)\n\n%s", count, max, body), maxEmbedDescriptionLength)
+
 	d.followup(s, i, function, &discordgo.MessageEmbed{
-		Title: title,
-		Color: model.Green.Int(),
-		Fields: []*discordgo.MessageEmbedField{{
-			Name:   "10 derniers logs",
-			Value:  fmt.Sprintf("%d/%d\n\n%s", count, max, body),
-			Inline: false,
-		}},
-		Footer:    model.DefaultFooter,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Title:       title,
+		Color:       model.Green.Int(),
+		Description: description,
+		Footer:      model.DefaultFooter,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
