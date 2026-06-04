@@ -130,9 +130,9 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	updatedEmbed := i.Message.Embeds[0]
 	// Use Discord's timestamp in embed description for local time display
 	if updatedEmbed.Description != "" {
-		updatedEmbed.Description += fmt.Sprintf("\n\n%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description += fmt.Sprintf("\n\nAction '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
 	} else {
-		updatedEmbed.Description = fmt.Sprintf("%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description = fmt.Sprintf("Action '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
 	}
 	updatedEmbed.Footer = nil
 

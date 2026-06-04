@@ -152,9 +152,9 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			}
 		}
 
-		attachments := "<No Attachments>"
+		attachments := ""
 		if msg.AttachmentCount > 0 {
-			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
+			attachments = fmt.Sprintf("\nAttachments : <%d Attachments>", msg.AttachmentCount)
 			for _, name := range msg.AttachmentNames {
 				attachments += "\n- " + name
 			}
@@ -167,7 +167,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			}
 		}
 
-		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s%s\n",
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s%s%s\n",
 			msg.Timestamp.UTC().Format(time.DateTime),
 			username,
 			msg.AuthorID,
