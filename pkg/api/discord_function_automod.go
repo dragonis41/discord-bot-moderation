@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
@@ -113,6 +112,59 @@ func (d *Discord) moderateMessage(s *discordgo.Session, m *discordgo.Message) {
 	}
 }
 
+// websiteURLPattern matches http(s):// links and bare domains. It is compiled
+// once at package load instead of on every message.
+var websiteURLPattern = regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}(?:/[^\s]*)?`)
+
+// escalateContentViolation applies the shared warn → delete → ban escalation
+// used whenever a message breaks a content rule (a banned word or website).
+//
+//	It warns the author by DM with a copy of their (soon to be deleted) message,
+//	then either deletes the message (below the violation threshold) or bans the
+//	author (at or above it). It returns true once handled so the caller stops
+//	running further checks.
+//
+//	cause completes the sentence "...a été supprimé car {cause}", ruleReason is
+//	the reason logged/sent for the action, and logSubject describes the match in
+//	the internal info log.
+func (d *Discord) escalateContentViolation(s *discordgo.Session, m *discordgo.Message, checkName, cause, ruleReason, logSubject string) bool {
+	// Skip if the user is already being banned by a concurrent handler.
+	if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
+		return true
+	}
+
+	violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
+	guildName := guildNameByID(s, m.GuildID)
+
+	// Warn the user and send back a copy of their message.
+	warning := fmt.Sprintf(
+		"⚠️ **Avertissement %d/%d**\n"+
+			"Votre message sur le serveur [%s] a été supprimé car %s\n\n"+
+			"Voici une copie de votre message :\n",
+		violationCount, d.cache.violationThreshold, guildName, cause)
+	d.sendPrivateMessage(s, m, warning)
+	for _, part := range utils.SplitMessage(m.Content, 1900) {
+		d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", part))
+	}
+
+	if violationCount < d.cache.violationThreshold {
+		// Below threshold: log and delete the message.
+		d.logAutomoderationAction(s, m, model.ActionDeleteMessage, checkName, ruleReason)
+		d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("%s (violation %d/%d)", ruleReason, violationCount, d.cache.violationThreshold))
+	} else {
+		// Threshold reached: ban the user, guarding against concurrent bans.
+		if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
+			return true
+		}
+		d.logAutomoderationAction(s, m, model.ActionBan, checkName, ruleReason)
+		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%s\n%d automod violations", ruleReason, violationCount))
+	}
+
+	d.logInfo(m.GuildID, checkName, "Deleted message from %s containing %s (violation %d/%d)",
+		m.Author.Username, logSubject, violationCount, d.cache.violationThreshold)
+	return true
+}
+
 // checkBannedWords checks if the message contains any banned words
 //
 //	The check is case-insensitive and matches whole words / sentences.
@@ -122,15 +174,9 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 	// Check if banned words feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkBannedWords()",
-			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
-		})
+		d.logError(m.GuildID, "checkBannedWords()", "Failed to fetch automoderation settings: %s", err)
 		return false
 	}
-
 	if !settings.BannedWordsEnabled {
 		return false
 	}
@@ -138,16 +184,9 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 	// Get banned words from database
 	bannedWords, err := d.db.GetBannedWordsByGuildId(m.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkBannedWords()",
-			Message:  fmt.Sprintf("Failed to fetch banned words from database: %s", err),
-		})
+		d.logError(m.GuildID, "checkBannedWords()", "Failed to fetch banned words from database: %s", err)
 		return false
 	}
-
-	// Skip if no banned words are configured
 	if len(bannedWords) == 0 {
 		return false
 	}
@@ -155,94 +194,24 @@ func (d *Discord) checkBannedWords(s *discordgo.Session, m *discordgo.Message) b
 	messageLower := strings.ToLower(m.Content)
 
 	for _, bannedWord := range bannedWords {
-		var pattern string
-		// Create regex pattern that matches the word only if it's surrounded by:
-		// - start/end of string
-		// - whitespace
-		// - punctuation
-
-		// If IsRegex is true, treat the word pattern as a regex
+		// Match the word only when bounded by start/end of string, whitespace or
+		// punctuation. Literal words are escaped; regex patterns are used as-is.
 		word := bannedWord.WordPattern
 		if !bannedWord.IsRegex {
-			// Otherwise, escape the word to treat it as a literal string
 			word = regexp.QuoteMeta(bannedWord.WordPattern)
 		}
-		pattern = fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
+		pattern := fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
 		matched, err := regexp.MatchString(pattern, messageLower)
 		if err != nil {
-			d.log.LogError(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "checkBannedWords()",
-				Message:  fmt.Sprintf("Regex error for word '%s': %s", bannedWord.WordPattern, err),
-			})
+			d.logError(m.GuildID, "checkBannedWords()", "Regex error for word '%s': %s", bannedWord.WordPattern, err)
 			continue
 		}
 
 		if matched {
-			// Check if user is already pending ban before processing
-			if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
-				return true
-			}
-
-			// Increment violation count
-			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
-
-			// Send a warning to the user
-			guildName := "<unknown>"
-			guild, err := d.client.Guild(m.GuildID)
-			if err != nil {
-				d.log.LogError(logger.LogModel{
-					Database: d.db,
-					GuildID:  m.GuildID,
-					Function: "checkBannedWords()",
-					Message:  fmt.Sprintf("Failed to fetch guild info: %s", err),
-				})
-			}
-			if guild != nil {
-				guildName = guild.Name
-			}
-
-			warningMessage := fmt.Sprintf(
-				"⚠️ **Avertissement %d/%d**\n"+
-					"Votre message sur le serveur [%s] a été supprimé car il contient le mot `%s`\n\n"+
-					"Voici une copie de votre message :\n",
-				violationCount, d.cache.violationThreshold, guildName, bannedWord.WordPattern)
-
-			d.sendPrivateMessage(s, m, warningMessage)
-
-			message := utils.SplitMessage(m.Content, 1900)
-			for _, msgPart := range message {
-				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
-			}
-
-			if violationCount < d.cache.violationThreshold {
-				// Log and delete the message
-				d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
-				d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le mot `%s` est banni (violation %d/%d)", bannedWord.WordPattern, violationCount, d.cache.violationThreshold))
-			}
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				// Mark user as pending ban to prevent duplicate actions from concurrent handlers
-				if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
-					// User is already being banned, skip
-					return true
-				}
-				// Ban the user
-				d.logAutomoderationAction(s, m, model.ActionBan, "banned_word_check", fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern))
-				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le mot `%s` est banni\n%d automod violations", bannedWord.WordPattern, violationCount))
-			}
-
-			d.log.LogInfo(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "sendPrivateMessage()",
-				Message: fmt.Sprintf("Deleted message from %s containing banned word: [%s] (violation %d/%d)",
-					m.Author.Username, bannedWord.WordPattern, violationCount, d.cache.violationThreshold),
-			})
-
-			return true
+			return d.escalateContentViolation(s, m, "banned_word_check",
+				fmt.Sprintf("il contient le mot `%s`", bannedWord.WordPattern),
+				fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern),
+				fmt.Sprintf("banned word: [%s]", bannedWord.WordPattern))
 		}
 	}
 
@@ -257,15 +226,9 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 	// Check if banned websites feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkBannedWebsites()",
-			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
-		})
+		d.logError(m.GuildID, "checkBannedWebsites()", "Failed to fetch automoderation settings: %s", err)
 		return false
 	}
-
 	if !settings.BannedWebsitesEnabled {
 		return false
 	}
@@ -273,102 +236,25 @@ func (d *Discord) checkBannedWebsites(s *discordgo.Session, m *discordgo.Message
 	// Get banned websites from database
 	bannedWebsites, err := d.db.GetBannedWebsitesByGuildId(m.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkBannedWebsites()",
-			Message:  fmt.Sprintf("Failed to fetch banned websites from database: %s", err),
-		})
+		d.logError(m.GuildID, "checkBannedWebsites()", "Failed to fetch banned websites from database: %s", err)
 		return false
 	}
-
-	// Skip if no banned websites are configured
 	if len(bannedWebsites) == 0 {
 		return false
 	}
 
-	// Regex pattern to extract URLs from message
-	// This matches http://, https://, and bare domains
-	urlPattern := regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}(?:/[^\s]*)?`)
-	urls := urlPattern.FindAllString(m.Content, -1)
-
-	// Skip if no URLs found in message
-	if len(urls) == 0 {
+	// Skip messages that contain no URL-like token at all.
+	if len(websiteURLPattern.FindAllString(m.Content, -1)) == 0 {
 		return false
 	}
 
 	messageLower := strings.ToLower(m.Content)
-
-	// Check each banned website against the message
 	for _, bannedWebsite := range bannedWebsites {
-		websiteLower := strings.ToLower(bannedWebsite.WebsiteURL)
-
-		// Check if the banned website pattern appears in the message
-		if strings.Contains(messageLower, websiteLower) {
-			// Check if user is already pending ban before processing
-			if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
-				return true
-			}
-
-			// Increment violation count
-			violationCount := d.cache.IncrementViolation(m.GuildID, m.Author.ID)
-
-			// Send a warning to the user
-			guildName := "<unknown>"
-			guild, err := d.client.Guild(m.GuildID)
-			if err != nil {
-				d.log.LogError(logger.LogModel{
-					Database: d.db,
-					GuildID:  m.GuildID,
-					Function: "checkBannedWebsites()",
-					Message:  fmt.Sprintf("Failed to fetch guild info: %s", err),
-				})
-			}
-			if guild != nil {
-				guildName = guild.Name
-			}
-
-			d.logAutomoderationAction(s, m, model.ActionWarn, "banned_website_check", fmt.Sprintf("Site banni: `%s`", bannedWebsite.WebsiteURL))
-			warningMessage := fmt.Sprintf(
-				"⚠️ **Avertissement %d/%d**\n"+
-					"Votre message sur le serveur [%s] a été supprimé car il contient un lien interdit : `%s`\n\n"+
-					"Voici une copie de votre message :\n",
-				violationCount, d.cache.violationThreshold, guildName, bannedWebsite.WebsiteURL)
-			d.takeAutomoderationAction(s, m, model.ActionWarn, warningMessage)
-
-			// Send a copy of the deleted message
-			message := utils.SplitMessage(m.Content, 1900)
-			for _, msgPart := range message {
-				d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", msgPart))
-			}
-
-			if violationCount < d.cache.violationThreshold {
-				// Log and delete the message
-				d.logAutomoderationAction(s, m, model.ActionDeleteMessage, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
-				d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("Le site `%s` est banni (violation %d/%d)", bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold))
-			}
-
-			// Check if threshold is reached
-			if violationCount >= d.cache.violationThreshold {
-				// Mark user as pending ban to prevent duplicate actions from concurrent handlers
-				if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
-					// User is already being banned, skip
-					return true
-				}
-				// Ban the user
-				d.logAutomoderationAction(s, m, model.ActionBan, "banned_website_check", fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL))
-				d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Le site `%s` est banni\n%d automod violations", bannedWebsite.WebsiteURL, violationCount))
-			}
-
-			d.log.LogInfo(logger.LogModel{
-				Database: d.db,
-				GuildID:  m.GuildID,
-				Function: "checkBannedWebsites()",
-				Message: fmt.Sprintf("Deleted message from %s containing banned website: [%s] (violation %d/%d)",
-					m.Author.Username, bannedWebsite.WebsiteURL, violationCount, d.cache.violationThreshold),
-			})
-
-			return true
+		if strings.Contains(messageLower, strings.ToLower(bannedWebsite.WebsiteURL)) {
+			return d.escalateContentViolation(s, m, "banned_website_check",
+				fmt.Sprintf("il contient un lien interdit : `%s`", bannedWebsite.WebsiteURL),
+				fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL),
+				fmt.Sprintf("banned website: [%s]", bannedWebsite.WebsiteURL))
 		}
 	}
 
@@ -380,12 +266,7 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 	// Check if spam detection feature is enabled
 	settings, err := d.db.GetAutomoderationSettings(m.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkMessageSpam()",
-			Message:  fmt.Sprintf("Failed to fetch automoderation settings: %s", err),
-		})
+		d.logError(m.GuildID, "checkMessageSpam()", "Failed to fetch automoderation settings: %s", err)
 		return false
 	}
 
@@ -429,12 +310,7 @@ func (d *Discord) checkMessageSpam(s *discordgo.Session, m *discordgo.Message) b
 		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
 		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
 
-		d.log.LogSuccess(logger.LogModel{
-			Database: d.db,
-			GuildID:  m.GuildID,
-			Function: "checkMessageSpam()",
-			Message:  fmt.Sprintf("Banned user %s for cross-channel spam (%d duplicate messages across %d channels)", m.Author.Username, duplicateCount, len(channelsUsed)),
-		})
+		d.logSuccess(m.GuildID, "checkMessageSpam()", "Banned user %s for cross-channel spam (%d duplicate messages across %d channels)", m.Author.Username, duplicateCount, len(channelsUsed))
 
 		return true
 	}

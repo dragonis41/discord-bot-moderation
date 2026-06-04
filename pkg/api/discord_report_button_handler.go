@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
-	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 // buildReportActionButtons creates the action buttons for report messages
@@ -61,19 +59,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	// Defer the response
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error deferring response: %s", err),
-		})
+	if !d.deferEphemeral(s, i, "handleReportActions()") {
 		return
 	}
 
@@ -99,35 +85,12 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	// Get user info
 	ReportedUser, err := s.User(userID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error fetching user: %s", err),
-		})
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Title:       "Erreur",
-					Description: "Impossible de récupérer les informations de l'utilisateur.",
-					Color:       model.Red.Int(),
-					Timestamp:   time.Now().UTC().Format(time.RFC3339),
-				},
-			},
-		})
+		d.logError(i.GuildID, "handleReportActions()", "Error fetching user: %s", err)
+		d.followup(s, i, "handleReportActions()", errorEmbed("Erreur", "Impossible de récupérer les informations de l'utilisateur."))
 		return
 	}
 
-	guild, err := s.Guild(i.GuildID)
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error fetching guild: %s", err),
-		})
-		guild.Name = "<Unknown>"
-	}
+	guildName := guildNameByID(s, i.GuildID)
 
 	// Perform the action
 	var actionErr error
@@ -137,13 +100,13 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	switch action {
 	case "kick":
 		reason := fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Expulsé suite à un signalement`", guild.Name, time.Now().Unix()))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Expulsé suite à un signalement`", guildName, time.Now().Unix()))
 		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, reason)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été expulsé du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", i.Member.User.Username, ReportedUser.Username)
 	case "ban":
 		reason := fmt.Sprintf("Banni le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Banni suite à un signalement`", guild.Name, time.Now().Unix()))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Banni suite à un signalement`", guildName, time.Now().Unix()))
 		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, reason, 1)
 		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été banni du serveur.", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", i.Member.User.Username, ReportedUser.Username)
@@ -153,59 +116,23 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	if actionErr != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error performing %s: %s", action, actionErr),
-		})
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{
-					Title:       "Erreur",
-					Description: fmt.Sprintf("Impossible d'effectuer l'action. Vérifiez que le bot a les permissions nécessaires et que l'utilisateur est toujours sur le serveur."),
-					Color:       model.Red.Int(),
-					Timestamp:   time.Now().UTC().Format(time.RFC3339),
-				},
-			},
-		})
+		d.logError(i.GuildID, "handleReportActions()", "Error performing %s: %s", action, actionErr)
+		d.followup(s, i, "handleReportActions()", errorEmbed("Erreur", "Impossible d'effectuer l'action. Vérifiez que le bot a les permissions nécessaires et que l'utilisateur est toujours sur le serveur."))
 		return
 	}
 
-	d.log.LogSuccess(logger.LogModel{
-		Database: d.db,
-		GuildID:  i.GuildID,
-		Function: "handleReportActions()",
-		Message:  logMessage,
-	})
+	d.logSuccess(i.GuildID, "handleReportActions()", "%s", logMessage)
 
 	// Send success message
-	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{
-				Title:       "Action effectuée",
-				Description: successMessage,
-				Color:       model.Green.Int(),
-				Timestamp:   time.Now().UTC().Format(time.RFC3339),
-			},
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error sending follow-up message: %s", err),
-		})
-	}
+	d.followup(s, i, "handleReportActions()", successEmbed("Action effectuée", successMessage))
 
 	// Update the original report message to show the action was taken
 	updatedEmbed := i.Message.Embeds[0]
 	// Use Discord's timestamp in embed description for local time display
 	if updatedEmbed.Description != "" {
-		updatedEmbed.Description += fmt.Sprintf("\n\n%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description += fmt.Sprintf("\n\nAction '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
 	} else {
-		updatedEmbed.Description = fmt.Sprintf("%s effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description = fmt.Sprintf("Action '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
 	}
 	updatedEmbed.Footer = nil
 
@@ -217,11 +144,6 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		Components: &[]discordgo.MessageComponent{},
 	})
 	if err != nil {
-		d.log.LogError(logger.LogModel{
-			Database: d.db,
-			GuildID:  i.GuildID,
-			Function: "handleReportActions()",
-			Message:  fmt.Sprintf("Error updating message: %s", err),
-		})
+		d.logError(i.GuildID, "handleReportActions()", "Error updating message: %s", err)
 	}
 }

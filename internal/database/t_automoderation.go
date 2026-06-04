@@ -1,6 +1,8 @@
 package database
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -308,7 +310,7 @@ func (d *Database) GetAutomoderationSettings(guildID string) (*AutomoderationSet
 
 	if err != nil {
 		// If no row exists, return default settings (all enabled)
-		if err.Error() == "sql: no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) {
 			return settings, nil
 		}
 		return nil, fmt.Errorf("failed to get automoderation settings: %w", err)

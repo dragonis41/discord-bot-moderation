@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
@@ -18,26 +17,14 @@ type DiscordAdminFunctionInterface interface {
 	getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
 }
 
+// logDisplayLimit is how many recent log entries /get-bot-logs and
+// /get-moderation-logs fetch. It is generous on purpose: the renderer fills the
+// embed description up to Discord's limit and stops, so this just needs to be
+// large enough to fill that space.
+const logDisplayLimit = 50
+
 func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
-		})
-		return
-	}
-
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
-	})
-
-	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+	if !d.beginModCommand(s, i, "showStatus()") {
 		return
 	}
 
@@ -53,15 +40,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Connected servers
 	connectedServers := ""
 	for _, guild := range s.State.Guilds {
-		// Fetch full guild data if name is empty
-		if guild.Name == "" {
-			fullGuild, err := d.client.Guild(guild.ID)
-			if err != nil {
-				guild.Name = "<error fetching>"
-			}
-			guild = fullGuild
-		}
-		connectedServers += fmt.Sprintf("- [%s] (ID: %s)\n", guild.Name, guild.ID)
+		connectedServers += fmt.Sprintf("- [%s] (ID: %s)\n", d.guildDisplayName(guild), guild.ID)
 	}
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   "Serveurs connectés",
@@ -116,21 +95,12 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	last5Errors, err := d.db.GetSystemLogEntriesErrorsByGuildAndSystem(i.GuildID, 5)
 	if err == nil && len(last5Errors) > 0 {
-		errorMessages := ""
-		const maxLength = 950 // Leave some margin below 1024
-
+		var lines []string
 		for _, entry := range last5Errors {
-			logEntry := fmt.Sprintf("- [%s] `%s` : \n`%s`\n", formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content)
-
-			// Check if adding this entry would exceed the limit
-			if len(errorMessages)+len(logEntry) > maxLength {
-				errorMessages += "\n... (logs truncated)"
-				break
-			}
-			errorMessages += logEntry
+			lines = append(lines, fmt.Sprintf("- [%s] `%s` : \n`%s`\n", formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content))
 		}
 
-		if errorMessages != "" {
+		if errorMessages := joinLinesWithLimit(lines, 950); errorMessages != "" {
 			fields = append(fields, &discordgo.MessageEmbedField{
 				Name:   "5 dernières erreurs",
 				Value:  errorMessages,
@@ -139,84 +109,35 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	}
 
-	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{
-				Title:     "Status",
-				Color:     model.Green.Int(),
-				Fields:    fields,
-				Footer:    model.DefaultFooter,
-				Timestamp: time.Now().UTC().Format(time.RFC3339),
-			},
-		},
+	d.followup(s, i, "showStatus()", &discordgo.MessageEmbed{
+		Title:     "Status",
+		Color:     model.Green.Int(),
+		Fields:    fields,
+		Footer:    model.DefaultFooter,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "showStatus()",
-			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
-		})
-	}
 }
 
 func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
-		})
+	if !d.beginModCommand(s, i, "getMessageHistory()") {
 		return
 	}
 
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
-	})
-
-	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
-		return
-	}
-
-	options := i.ApplicationCommandData().Options
-	var limit = 10
-	// Parse options
-	for _, option := range options {
-		switch option.Name {
-		case "limit":
+	limit := 10
+	for _, option := range i.ApplicationCommandData().Options {
+		if option.Name == "limit" {
 			limit = int(option.IntValue())
 		}
 	}
 	if limit <= 0 || limit > 100 {
-		// Send error message
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Message History", Color: model.Red.Int(), Description: "La limite doit être comprise entre 1 et 100.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.followup(s, i, "getMessageHistory()", errorEmbed("Message History", "La limite doit être comprise entre 1 et 100."))
 		return
 	}
 
 	// Get the message history from the cache
 	historyMessages := d.cache.GetGuildRecentMessages(i.GuildID, limit)
 	if len(historyMessages) == 0 {
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Message History", Color: model.Red.Int(), Description: "Aucun message en cache pour ce serveur.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.followup(s, i, "getMessageHistory()", errorEmbed("Message History", "Aucun message en cache pour ce serveur."))
 		return
 	}
 
@@ -237,9 +158,9 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			}
 		}
 
-		attachments := "<No Attachments>"
+		attachments := ""
 		if msg.AttachmentCount > 0 {
-			attachments = fmt.Sprintf("<%d Attachments>", msg.AttachmentCount)
+			attachments = fmt.Sprintf("\nAttachments : <%d Attachments>", msg.AttachmentCount)
 			for _, name := range msg.AttachmentNames {
 				attachments += "\n- " + name
 			}
@@ -252,7 +173,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			}
 		}
 
-		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s\nAttachments : %s%s\n",
+		messageContent += fmt.Sprintf("----------------------------------------\n[%s UTC] @%s (ID: %s) in #%s\nMessage : %s%s%s\n",
 			msg.Timestamp.UTC().Format(time.DateTime),
 			username,
 			msg.AuthorID,
@@ -263,7 +184,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		)
 	}
 
-	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Files: []*discordgo.File{
 			{
 				Name:        fmt.Sprintf("message_history_%s_%s.txt", i.GuildID, time.Now().Format("20060102_150405")),
@@ -273,204 +194,93 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		},
 	})
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getMessageHistory()",
-			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
-		})
+		d.logError(i.GuildID, "getMessageHistory()", "Error sending follow-up message: %s", err)
 	}
 }
 
 func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
-		})
-		return
-	}
-
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
-	})
-
-	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+	if !d.beginModCommand(s, i, "getBotLogs()") {
 		return
 	}
 
 	nbEntries, err := d.db.GetSystemLogEntriesCount(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-			Message: fmt.Sprintf("Error getting system log entries count: %s", err),
-		})
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.logError(i.GuildID, "getBotLogs()", "Error getting system log entries count: %s", err)
+		d.followup(s, i, "getBotLogs()", errorEmbed("Bot logs", "Erreur lors de la récupération des logs du bot."))
 		return
 	}
 
 	maxEntries, err := d.db.GetMaxSystemLogEntries(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-			Message: fmt.Sprintf("Error getting max system log entries: %s", err),
-		})
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Bot logs", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs du bot.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.logError(i.GuildID, "getBotLogs()", "Error getting max system log entries: %s", err)
+		d.followup(s, i, "getBotLogs()", errorEmbed("Bot logs", "Erreur lors de la récupération des logs du bot."))
 		return
 	}
 
-	var fields []*discordgo.MessageEmbedField
-	last10Errors, err := d.db.GetSystemLogEntriesByGuild(i.GuildID, 10)
-	errorMessages := "Aucun log trouvé."
-	if err == nil && len(last10Errors) > 0 {
-		errorMessages = ""
-		const maxLength = 950 // Leave some margin below 1024
-
-		for _, entry := range last10Errors {
-			logEntry := fmt.Sprintf("----------------------------------------\n- [%s] `%s` : \n`%s`\n",
-				formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content)
-
-			// Check if adding this entry would exceed the limit
-			if len(errorMessages)+len(logEntry) > maxLength {
-				errorMessages += "\n... (logs truncated)"
-				break
-			}
-			errorMessages += logEntry
-		}
+	entries, _ := d.db.GetSystemLogEntriesByGuild(i.GuildID, logDisplayLimit)
+	var lines []string
+	for _, entry := range entries {
+		lines = append(lines, fmt.Sprintf("----------------------------------------\n- [%s] `%s` : \n`%s`\n",
+			formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content))
 	}
 
-	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "10 derniers logs",
-		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
-		Inline: false,
-	})
-
-	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Bot logs", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getBotLogs()",
-			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
-		})
-	}
+	d.followupLogEmbed(s, i, "getBotLogs()", "Bot logs", nbEntries, maxEntries, lines, "Aucun log trouvé.")
 }
 
 func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer the response
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Flags: discordgo.MessageFlagsEphemeral,
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-			Message: fmt.Sprintf("Error deferring response: %s", err),
-		})
-		return
-	}
-
-	d.log.LogInfo(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-		Message: fmt.Sprintf("Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username),
-	})
-
-	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
+	if !d.beginModCommand(s, i, "getModerationLogs()") {
 		return
 	}
 
 	nbEntries, err := d.db.GetModerationLogEntriesCount(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-			Message: fmt.Sprintf("Error getting mod log entries count: %s", err),
-		})
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.logError(i.GuildID, "getModerationLogs()", "Error getting mod log entries count: %s", err)
+		d.followup(s, i, "getModerationLogs()", errorEmbed("Logs de modération", "Erreur lors de la récupération des logs de modération."))
 		return
 	}
 
 	maxEntries, err := d.db.GetMaxModerationLogEntries(i.GuildID)
 	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-			Message: fmt.Sprintf("Error getting max system log entries: %s", err),
-		})
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{
-				{Title: "Logs de modération", Color: model.Red.Int(), Description: "Erreur lors de la récupération des logs de modération.", Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-			},
-		})
-		if err != nil {
-			d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-				Message: fmt.Sprintf("Error sending follow-up error message: %s", err),
-			})
-		}
+		d.logError(i.GuildID, "getModerationLogs()", "Error getting max moderation log entries: %s", err)
+		d.followup(s, i, "getModerationLogs()", errorEmbed("Logs de modération", "Erreur lors de la récupération des logs de modération."))
 		return
 	}
 
-	var fields []*discordgo.MessageEmbedField
-	errorMessages := "Aucun log de modération trouvé."
-	last10Errors, err := d.db.GetModerationLogEntriesByGuild(i.GuildID, 10)
-	if err == nil && len(last10Errors) > 0 {
-		errorMessages = ""
-		const maxLength = 950 // Leave some margin below 1024
+	entries, _ := d.db.GetModerationLogEntriesByGuild(i.GuildID, logDisplayLimit)
+	var lines []string
+	for _, entry := range entries {
 
-		for _, entry := range last10Errors {
-			logEntry := fmt.Sprintf("----------------------------------------\n- [%s] Action : `%s` <@%s> (ID: %s) : \n`%s`\n",
-				formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.UserID, entry.Reason)
-
-			// Check if adding this entry would exceed the limit
-			if len(errorMessages)+len(logEntry) > maxLength {
-				errorMessages += "\n... (logs truncated)"
-				break
-			}
-			errorMessages += logEntry
-		}
+		lines = append(lines, fmt.Sprintf("----------------------------------------\n- [%s] Action : `%s` <@%s> (%s | %s) : \n`%s`\n",
+			formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.Username, entry.UserID, entry.Reason))
 	}
 
-	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "10 derniers logs",
-		Value:  fmt.Sprintf("%d/%d\n\n%s", nbEntries, maxEntries, errorMessages),
-		Inline: false,
-	})
+	d.followupLogEmbed(s, i, "getModerationLogs()", "Logs de modération", nbEntries, maxEntries, lines, "Aucun log de modération trouvé.")
+}
 
-	_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Logs de modération", Color: model.Green.Int(), Fields: fields, Footer: model.DefaultFooter, Timestamp: time.Now().UTC().Format(time.RFC3339)},
-		},
-	})
-	if err != nil {
-		d.log.LogError(logger.LogModel{Database: d.db, GuildID: i.GuildID, Function: "getModerationLogs()",
-			Message: fmt.Sprintf("Error sending follow-up message: %s", err),
-		})
+// followupLogEmbed sends the standard log-listing embed: a green embed whose
+// description shows count/max followed by as many log lines as fit. The list is
+// rendered into the embed description (4096 chars) rather than a field (1024),
+// so it holds roughly four times more before truncating. emptyMessage is shown
+// when there are no log lines.
+func (d *Discord) followupLogEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, function, title string, count, max int, lines []string, emptyMessage string) {
+	// Reserve a little room for the "count/max" header so the joined log lines
+	// can use the rest of the 4096-char description budget.
+	const headerMargin = 96
+
+	body := emptyMessage
+	if len(lines) > 0 {
+		body = joinLinesWithLimit(lines, maxEmbedDescriptionLength-headerMargin)
 	}
+
+	description := truncate(fmt.Sprintf("**Derniers logs** (%d/%d)\n\n%s", count, max, body), maxEmbedDescriptionLength)
+
+	d.followup(s, i, function, &discordgo.MessageEmbed{
+		Title:       title,
+		Color:       model.Green.Int(),
+		Description: description,
+		Footer:      model.DefaultFooter,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // formatDiscordTimestamp converts a string timestamp to Discord's timestamp format
