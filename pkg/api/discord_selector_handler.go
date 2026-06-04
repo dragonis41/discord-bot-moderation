@@ -142,7 +142,7 @@ func (d *Discord) handleAutomoderationSettings(s *discordgo.Session, i *discordg
 	d.handleSelection(s, i, config, dbOps, d.getAutomoderationFeaturesAsItems, formatDoneMessage)
 }
 
-func (d *Discord) getAutomoderationFeaturesAsItems(s *discordgo.Session, guildID string) ([]SelectionItem, error) {
+func (d *Discord) getAutomoderationFeaturesAsItems(s discordClient, guildID string) ([]SelectionItem, error) {
 	features := []SelectionItem{
 		AutomodFeatureItem{
 			ID:          "banned_words",

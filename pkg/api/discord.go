@@ -13,14 +13,67 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
+// store is everything the api package needs from the database. It is composed
+// from the interfaces the database package already exposes, so *database.Database
+// satisfies it automatically while tests can supply a lightweight fake (embed
+// store and override only the methods a given test exercises).
+type store interface {
+	database.HelperInterface
+	database.LogChannelsInterface
+	database.ModerationChannelsInterface
+	database.ExcludedChannelsInterface
+	database.ModerationRolesInterface
+	database.LogsConfigInterface
+	database.ModerationLogsInterface
+	database.SystemLogsInterface
+	database.AutomoderationInterface
+}
+
+// discordSender is the subset of *discordgo.Session used by the message-effect
+// layer (DM/warn/delete/kick/ban and embed delivery). The real session satisfies
+// it, so production passes its concrete *discordgo.Session unchanged; tests pass
+// a fake that records the calls. The signatures match discordgo exactly,
+// including the variadic RequestOption, so *discordgo.Session implements it for
+// free.
+type discordSender interface {
+	Guild(guildID string, options ...discordgo.RequestOption) (*discordgo.Guild, error)
+	UserChannelCreate(recipientID string, options ...discordgo.RequestOption) (*discordgo.Channel, error)
+	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageSendEmbed(channelID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageDelete(channelID, messageID string, options ...discordgo.RequestOption) error
+	GuildMemberDeleteWithReason(guildID, userID, reason string, options ...discordgo.RequestOption) error
+	GuildBanCreateWithReason(guildID, userID, reason string, days int, options ...discordgo.RequestOption) error
+}
+
+// discordClient extends discordSender with the interaction-oriented methods used
+// by the slash-command and selection-menu handlers (acknowledge, follow-up,
+// edit, and the channel/role/user lookups). *discordgo.Session satisfies it, so
+// production passes its concrete session unchanged while tests pass a fake.
+// Handlers that need only the message-effect subset keep discordSender; those
+// that drive an interaction take discordClient. Note the AddHandler callbacks
+// (slashCommandHandler, the selection callbacks, etc.) must keep the concrete
+// *discordgo.Session signature so discordgo's reflection can register them; they
+// pass that concrete session down, which satisfies these interfaces for free.
+type discordClient interface {
+	discordSender
+	InteractionRespond(interaction *discordgo.Interaction, resp *discordgo.InteractionResponse, options ...discordgo.RequestOption) error
+	InteractionResponseEdit(interaction *discordgo.Interaction, newresp *discordgo.WebhookEdit, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	FollowupMessageCreate(interaction *discordgo.Interaction, wait bool, data *discordgo.WebhookParams, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	FollowupMessageEdit(interaction *discordgo.Interaction, messageID string, data *discordgo.WebhookEdit, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	GuildChannels(guildID string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error)
+	GuildRoles(guildID string, options ...discordgo.RequestOption) ([]*discordgo.Role, error)
+	User(userID string, options ...discordgo.RequestOption) (*discordgo.User, error)
+	ChannelMessageEditComplex(m *discordgo.MessageEdit, options ...discordgo.RequestOption) (*discordgo.Message, error)
+}
+
 type Discord struct {
 	log    *logger.Logger
-	db     *database.Database
+	db     store
 	client *discordgo.Session
 	cache  *Cache
 }
 
-func NewClient(log *logger.Logger, db *database.Database, discordClient *discordgo.Session, cache *Cache) *Discord {
+func NewClient(log *logger.Logger, db store, discordClient *discordgo.Session, cache *Cache) *Discord {
 	return &Discord{
 		log:    log,
 		db:     db,

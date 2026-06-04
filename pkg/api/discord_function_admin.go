@@ -13,8 +13,8 @@ import (
 type DiscordAdminFunctionInterface interface {
 	showStatus(s *discordgo.Session, i *discordgo.InteractionCreate)
 	getMessageHistory(s *discordgo.Session, i *discordgo.InteractionCreate)
-	getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
-	getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate)
+	getBotLogs(s discordClient, i *discordgo.InteractionCreate)
+	getModerationLogs(s discordClient, i *discordgo.InteractionCreate)
 }
 
 // logDisplayLimit is how many recent log entries /get-bot-logs and
@@ -198,7 +198,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	}
 }
 
-func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) getBotLogs(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "getBotLogs()") {
 		return
 	}
@@ -227,7 +227,7 @@ func (d *Discord) getBotLogs(s *discordgo.Session, i *discordgo.InteractionCreat
 	d.followupLogEmbed(s, i, "getBotLogs()", "Bot logs", nbEntries, maxEntries, lines, "Aucun log trouvé.")
 }
 
-func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (d *Discord) getModerationLogs(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "getModerationLogs()") {
 		return
 	}
@@ -262,7 +262,7 @@ func (d *Discord) getModerationLogs(s *discordgo.Session, i *discordgo.Interacti
 // rendered into the embed description (4096 chars) rather than a field (1024),
 // so it holds roughly four times more before truncating. emptyMessage is shown
 // when there are no log lines.
-func (d *Discord) followupLogEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, function, title string, count, max int, lines []string, emptyMessage string) {
+func (d *Discord) followupLogEmbed(s discordClient, i *discordgo.InteractionCreate, function, title string, count, max int, lines []string, emptyMessage string) {
 	// Reserve a little room for the "count/max" header so the joined log lines
 	// can use the rest of the 4096-char description budget.
 	const headerMargin = 96
