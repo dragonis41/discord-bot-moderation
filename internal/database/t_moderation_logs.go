@@ -2,13 +2,14 @@ package database
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 type ModerationLogsInterface interface {
 	MigrateModerationLogs() error
-	AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, trigger string, reason string) error
+	AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, username string, trigger string, reason string) error
 	GetModerationLogEntriesByGuild(guildID string, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesByAction(guildID string, action model.ModerationLogAction, limit int) ([]ModerationLogEntry, error)
 	GetModerationLogEntriesCount(guildID string) (int, error)
@@ -20,6 +21,7 @@ type ModerationLogEntry struct {
 	GuildID   string
 	Action    string
 	UserID    string
+	Username  string
 	Trigger   string
 	Reason    string
 	CreatedAt string
@@ -32,6 +34,7 @@ func (d *Database) MigrateModerationLogs() error {
 		guild_id TEXT NOT NULL,
 		action TEXT NOT NULL,
 		user_id text NOT NULL,
+		username TEXT NOT NULL DEFAULT 'Unknown',
 		trigger TEXT NOT NULL,
 		reason TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -41,6 +44,14 @@ func (d *Database) MigrateModerationLogs() error {
 	_, err := d.db.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create moderation_logs table: %w", err)
+	}
+
+	// Add the username column to pre-existing tables. Old rows get 'Unknown'
+	// since their username was never captured. Ignore the error if the column
+	// already exists (SQLite has no "ADD COLUMN IF NOT EXISTS").
+	_, err = d.db.Exec(`ALTER TABLE moderation_logs ADD COLUMN username TEXT NOT NULL DEFAULT 'Unknown';`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("failed to add username column to moderation_logs table: %w", err)
 	}
 
 	// Create index for better performance on guild_id queries
@@ -57,7 +68,7 @@ func (d *Database) MigrateModerationLogs() error {
 	return nil
 }
 
-func (d *Database) AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, trigger string, reason string) error {
+func (d *Database) AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID string, username string, trigger string, reason string) error {
 	// First, get the max entries limit for this guild
 	maxEntries, err := d.GetMaxModerationLogEntries(guildID)
 	if err != nil {
@@ -66,11 +77,11 @@ func (d *Database) AddModerationLogEntry(guildID string, action model.Moderation
 
 	// Insert the new log entry
 	insertQuery := `
-	INSERT INTO moderation_logs (guild_id, action, user_id, trigger, reason)
-	VALUES (?, ?, ?, ?, ?);
+	INSERT INTO moderation_logs (guild_id, action, user_id, username, trigger, reason)
+	VALUES (?, ?, ?, ?, ?, ?);
 	`
 
-	_, err = d.db.Exec(insertQuery, guildID, action, userID, trigger, reason)
+	_, err = d.db.Exec(insertQuery, guildID, action, userID, username, trigger, reason)
 	if err != nil {
 		return fmt.Errorf("failed to add log entry: %w", err)
 	}
@@ -110,7 +121,7 @@ func (d *Database) cleanupOldModerationLogEntries(guildID string, maxEntries int
 // GetModerationLogEntriesByGuild retrieves log entries for a specific guild
 func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]ModerationLogEntry, error) {
 	query := `
-	SELECT id, guild_id, action, user_id, trigger, reason, created_at
+	SELECT id, guild_id, action, user_id, username, trigger, reason, created_at
 	FROM moderation_logs
 	WHERE guild_id = ?
 	ORDER BY created_at DESC, id DESC
@@ -127,7 +138,7 @@ func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]
 	for rows.Next() {
 		var entry ModerationLogEntry
 		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action, &entry.UserID,
-			&entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
+			&entry.Username, &entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan guild log entry: %w", err)
 		}
 		entries = append(entries, entry)
@@ -143,7 +154,7 @@ func (d *Database) GetModerationLogEntriesByGuild(guildID string, limit int) ([]
 // GetModerationLogEntriesByAction retrieves log entries for a specific guild filtered by action type
 func (d *Database) GetModerationLogEntriesByAction(guildID string, action model.ModerationLogAction, limit int) ([]ModerationLogEntry, error) {
 	query := `
-		SELECT id, guild_id, action, user_id, trigger, reason, created_at
+		SELECT id, guild_id, action, user_id, username, trigger, reason, created_at
 		FROM moderation_logs
 		WHERE guild_id = ? AND action = ?
 		ORDER BY created_at DESC, id DESC
@@ -160,7 +171,7 @@ func (d *Database) GetModerationLogEntriesByAction(guildID string, action model.
 	for rows.Next() {
 		var entry ModerationLogEntry
 		if err := rows.Scan(&entry.ID, &entry.GuildID, &entry.Action, &entry.UserID,
-			&entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
+			&entry.Username, &entry.Trigger, &entry.Reason, &entry.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan moderation log entry: %w", err)
 		}
 		entries = append(entries, entry)

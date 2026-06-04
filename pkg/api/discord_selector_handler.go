@@ -33,7 +33,7 @@ func (d *Discord) getLogChannelConfig() (SelectionConfig, DatabaseOperations) {
 	config := SelectionConfig{
 		Prefix:          "log_channel",
 		ItemsPerPage:    channelsPerPage,
-		Title:           "Sélection des salons",
+		Title:           "Sélection des salons de logs",
 		Description:     "Sélectionnez les salons de logs puis cliquez sur \"Terminer\".\nCe sont les salons dans lesquels les actions de modération vont être loggées.",
 		Placeholder:     "Sélectionnez les salons de logs",
 		DoneDescription: "⚠️ Aucun salon sélectionné",
@@ -51,7 +51,7 @@ func (d *Discord) getModChannelConfig() (SelectionConfig, DatabaseOperations) {
 	config := SelectionConfig{
 		Prefix:          "mod_channel",
 		ItemsPerPage:    channelsPerPage,
-		Title:           "Sélection des salons",
+		Title:           "Sélection des salons de modération",
 		Description:     "Sélectionnez les salons de modération puis cliquez sur \"Terminer\".\nCe sont les salons dans lesquels les modérateurs vont être notifiés.",
 		Placeholder:     "Sélectionnez les salons de modération",
 		DoneDescription: "⚠️ Aucun salon sélectionné",
@@ -87,7 +87,7 @@ func (d *Discord) getModRoleConfig() (SelectionConfig, DatabaseOperations) {
 	config := SelectionConfig{
 		Prefix:          "mod_role",
 		ItemsPerPage:    rolesPerPage,
-		Title:           "Sélection des roles",
+		Title:           "Sélection des roles de modération",
 		Description:     "Sélectionnez les roles de modération puis cliquez sur \"Terminer\".\nCe sont les roles qui sont administrateurs du serveur et qui seront notifiés.\n\n⚠️ Attention, si vous ne possédez pas au moins un de ces rôles, vous ne pourrez plus utiliser les commandes d'administration !",
 		Placeholder:     "Sélectionnez les roles de modération",
 		DoneDescription: "⚠️ Aucun role sélectionné.",

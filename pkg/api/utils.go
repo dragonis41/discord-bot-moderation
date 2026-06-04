@@ -207,7 +207,7 @@ func (d *Discord) sendModChannelsEmbed(s *discordgo.Session, guildID string, emb
 // logAutomoderationAction sends an alert to moderators and save it in DB
 func (d *Discord) logAutomoderationAction(s *discordgo.Session, m *discordgo.Message, action model.ModerationLogAction, trigger string, reason string) {
 	// Log in the database
-	if err := d.db.AddModerationLogEntry(m.GuildID, action, m.Author.ID, trigger, reason); err != nil {
+	if err := d.db.AddModerationLogEntry(m.GuildID, action, m.Author.ID, m.Author.Username, trigger, reason); err != nil {
 		d.logError(m.GuildID, "logAutomoderationAction()", "Error logging automod action to database: %s", err)
 	}
 

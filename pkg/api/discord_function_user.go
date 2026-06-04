@@ -39,7 +39,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		i.ApplicationCommandData().Name, i.Member.User.Username, reportedUser.Username, reason)
 
 	// Log the report in the database
-	if err := d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.Username, reason)); err != nil {
+	if err := d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, reportedUser.Username, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.Username, reason)); err != nil {
 		d.logError(i.GuildID, "reportUser()", "Error logging report to database: %s", err)
 	}
 
