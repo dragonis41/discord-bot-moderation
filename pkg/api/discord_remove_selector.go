@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
@@ -39,22 +40,25 @@ type removeSelector struct {
 	emptyMsg    string // shown when the guild has nothing to remove
 	errorTitle  string // title for error embeds
 	errorMsg    string // body for the "fetch failed" error embed
-	noun        string // singular noun used in the confirmation ("mot", "site")
+	noun        string // pluralizable noun used in the confirmation ("word(s)", "website(s)")
+
+	lang i18n.Lang // guild language, used for the dynamic counters/notices below
 
 	list   func(guildID string) ([]removeOption, error)
 	remove func(guildID string, id int) (bool, error)
 }
 
-func (d *Discord) bannedWordRemoveSelector() removeSelector {
+func (d *Discord) bannedWordRemoveSelector(lang i18n.Lang) removeSelector {
 	return removeSelector{
 		prefix:      "rmword",
-		title:       "🗑️ Supprimer un mot interdit",
-		intro:       "Sélectionnez le ou les mots à supprimer de la liste des mots interdits.",
-		placeholder: "Sélectionnez les mots à supprimer",
-		emptyMsg:    "Aucun mot interdit n'est configuré pour ce serveur.",
-		errorTitle:  "Mots interdits",
-		errorMsg:    "Une erreur est survenue lors de la récupération des mots interdits.",
-		noun:        "mot",
+		title:       i18n.T(lang, "remove.word.title"),
+		intro:       i18n.T(lang, "remove.word.intro"),
+		placeholder: i18n.T(lang, "remove.word.placeholder"),
+		emptyMsg:    i18n.T(lang, "remove.word.empty"),
+		errorTitle:  i18n.T(lang, "remove.word.error_title"),
+		errorMsg:    i18n.T(lang, "remove.word.error"),
+		noun:        i18n.T(lang, "remove.word.noun"),
+		lang:        lang,
 		list: func(guildID string) ([]removeOption, error) {
 			words, err := d.db.GetBannedWordsByGuildId(guildID)
 			if err != nil {
@@ -62,14 +66,14 @@ func (d *Discord) bannedWordRemoveSelector() removeSelector {
 			}
 			opts := make([]removeOption, len(words))
 			for i, w := range words {
-				wordType := "littéral"
+				wordType := i18n.T(lang, "bannedword.type_literal")
 				if w.IsRegex {
-					wordType = "regex"
+					wordType = i18n.T(lang, "bannedword.type_regex")
 				}
 				opts[i] = removeOption{
 					ID:    w.ID,
 					Label: w.WordPattern,
-					Desc:  "type : " + wordType,
+					Desc:  i18n.T(lang, "remove.type", wordType),
 				}
 			}
 			return opts, nil
@@ -78,16 +82,17 @@ func (d *Discord) bannedWordRemoveSelector() removeSelector {
 	}
 }
 
-func (d *Discord) bannedWebsiteRemoveSelector() removeSelector {
+func (d *Discord) bannedWebsiteRemoveSelector(lang i18n.Lang) removeSelector {
 	return removeSelector{
 		prefix:      "rmsite",
-		title:       "🗑️ Supprimer un site web interdit",
-		intro:       "Sélectionnez le ou les sites à supprimer de la liste des sites web interdits.",
-		placeholder: "Sélectionnez les sites à supprimer",
-		emptyMsg:    "Aucun site web interdit n'est configuré pour ce serveur.",
-		errorTitle:  "Sites web interdits",
-		errorMsg:    "Une erreur est survenue lors de la récupération des sites web interdits.",
-		noun:        "site",
+		title:       i18n.T(lang, "remove.site.title"),
+		intro:       i18n.T(lang, "remove.site.intro"),
+		placeholder: i18n.T(lang, "remove.site.placeholder"),
+		emptyMsg:    i18n.T(lang, "remove.site.empty"),
+		errorTitle:  i18n.T(lang, "remove.site.error_title"),
+		errorMsg:    i18n.T(lang, "remove.site.error"),
+		noun:        i18n.T(lang, "remove.site.noun"),
+		lang:        lang,
 		list: func(guildID string) ([]removeOption, error) {
 			sites, err := d.db.GetBannedWebsitesByGuildId(guildID)
 			if err != nil {
@@ -110,12 +115,12 @@ func (d *Discord) startRemoveSelection(s discordClient, i *discordgo.Interaction
 	opts, err := sel.list(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, function, "Error fetching items: %s", err)
-		d.followup(s, i, function, errorEmbed(sel.errorTitle, sel.errorMsg))
+		d.followup(s, i, function, errorEmbed(sel.lang, sel.errorTitle, sel.errorMsg))
 		return
 	}
 
 	if len(opts) == 0 {
-		d.followup(s, i, function, infoEmbed(sel.title, sel.emptyMsg))
+		d.followup(s, i, function, infoEmbed(sel.lang, sel.title, sel.emptyMsg))
 		return
 	}
 
@@ -161,11 +166,11 @@ func buildRemoveMessage(sel removeSelector, opts []removeOption, page int, notic
 		}},
 	}
 
-	if buttons := removeNavigationButtons(sel.prefix, page, totalPages); len(buttons) > 0 {
+	if buttons := removeNavigationButtons(sel.lang, sel.prefix, page, totalPages); len(buttons) > 0 {
 		components = append(components, discordgo.ActionsRow{Components: buttons})
 	}
 
-	description := fmt.Sprintf("%s\n\n**Total** : %d entrée(s). **Page %d/%d**.", sel.intro, len(opts), page+1, totalPages)
+	description := sel.intro + "\n\n" + i18n.T(sel.lang, "remove.total", len(opts), page+1, totalPages)
 	if notice != "" {
 		description = notice + "\n\n" + description
 	}
@@ -174,7 +179,7 @@ func buildRemoveMessage(sel removeSelector, opts []removeOption, page int, notic
 		Title:       sel.title,
 		Description: truncate(description, maxEmbedDescriptionLength),
 		Color:       model.Blue.Int(),
-		Footer:      model.DefaultFooter,
+		Footer:      hintFooter(sel.lang),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}, components
 }
@@ -183,25 +188,25 @@ func buildRemoveMessage(sel removeSelector, opts []removeOption, page int, notic
 // indicator) when the list spans more than one page, and nothing otherwise. The
 // indicator's custom id deliberately avoids the "_select"/"_page_" namespaces so
 // the handler never tries to route it (it is disabled and never fires anyway).
-func removeNavigationButtons(prefix string, page, totalPages int) []discordgo.MessageComponent {
+func removeNavigationButtons(lang i18n.Lang, prefix string, page, totalPages int) []discordgo.MessageComponent {
 	if totalPages <= 1 {
 		return nil
 	}
 	return []discordgo.MessageComponent{
 		discordgo.Button{
-			Label:    "◀️ Précédent",
+			Label:    i18n.T(lang, "button.prev"),
 			Style:    discordgo.PrimaryButton,
 			CustomID: fmt.Sprintf("%s_page_prev_%d", prefix, page),
 			Disabled: page == 0,
 		},
 		discordgo.Button{
-			Label:    fmt.Sprintf("Page %d/%d", page+1, totalPages),
+			Label:    i18n.T(lang, "button.page", page+1, totalPages),
 			Style:    discordgo.SecondaryButton,
 			CustomID: prefix + "_indicator",
 			Disabled: true,
 		},
 		discordgo.Button{
-			Label:    "Suivant ▶️",
+			Label:    i18n.T(lang, "button.next"),
 			Style:    discordgo.PrimaryButton,
 			CustomID: fmt.Sprintf("%s_page_next_%d", prefix, page),
 			Disabled: page == totalPages-1,
@@ -213,11 +218,11 @@ func removeNavigationButtons(prefix string, page, totalPages int) []discordgo.Me
 // discordgo component callbacks (registered in RunDiscordBot). They delegate to
 // the shared handler with the matching selector.
 func (d *Discord) handleRemoveBannedWordSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	d.handleRemoveSelection(s, i, d.bannedWordRemoveSelector(), "handleRemoveBannedWordSelection()")
+	d.handleRemoveSelection(s, i, d.bannedWordRemoveSelector(d.lang(i.GuildID)), "handleRemoveBannedWordSelection()")
 }
 
 func (d *Discord) handleRemoveBannedWebsiteSelection(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	d.handleRemoveSelection(s, i, d.bannedWebsiteRemoveSelector(), "handleRemoveBannedWebsiteSelection()")
+	d.handleRemoveSelection(s, i, d.bannedWebsiteRemoveSelector(d.lang(i.GuildID)), "handleRemoveBannedWebsiteSelection()")
 }
 
 // handleRemoveSelection routes a component interaction belonging to this
@@ -293,13 +298,13 @@ func (d *Discord) handleRemoveDelete(s discordClient, i *discordgo.InteractionCr
 // removeNotice builds the confirmation line shown after a deletion attempt.
 func removeNotice(sel removeSelector, removed []string) string {
 	if len(removed) == 0 {
-		return "⚠️ Aucune entrée n'a été supprimée."
+		return i18n.T(sel.lang, "remove.notice_none")
 	}
 	quoted := make([]string, len(removed))
 	for i, r := range removed {
 		quoted[i] = fmt.Sprintf("`%s`", sanitizeInlineCode(r))
 	}
-	return fmt.Sprintf("✅ %d %s supprimé(s) : %s", len(removed), sel.noun, strings.Join(quoted, ", "))
+	return i18n.T(sel.lang, "remove.notice", len(removed), sel.noun, strings.Join(quoted, ", "))
 }
 
 // handleRemovePage re-renders the menu at the previous or next page.
@@ -337,7 +342,7 @@ func (d *Discord) respondRemoveUpdate(s discordClient, i *discordgo.InteractionC
 			Title:       sel.title,
 			Description: desc,
 			Color:       model.Blue.Int(),
-			Footer:      model.DefaultFooter,
+			Footer:      hintFooter(sel.lang),
 			Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		}
 	} else {
@@ -362,7 +367,7 @@ func (d *Discord) respondRemoveError(s discordClient, i *discordgo.InteractionCr
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Flags:  discordgo.MessageFlagsEphemeral,
-			Embeds: []*discordgo.MessageEmbed{errorEmbed(sel.errorTitle, sel.errorMsg)},
+			Embeds: []*discordgo.MessageEmbed{errorEmbed(sel.lang, sel.errorTitle, sel.errorMsg)},
 		},
 	}); err != nil {
 		d.logError(i.GuildID, "respondRemoveError()", "Error responding to interaction: %s", err)

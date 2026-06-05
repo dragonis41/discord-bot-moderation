@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 )
 
 // --- Banned word commands ----------------------------------------------------
@@ -87,7 +88,7 @@ func TestRemoveBannedWordCommandEmpty(t *testing.T) {
 	if len(fake.followups[0].Components) != 0 {
 		t.Error("an empty list must not show a dropdown")
 	}
-	if !strings.Contains(fake.followups[0].Embeds[0].Description, "Aucun") {
+	if !strings.Contains(fake.followups[0].Embeds[0].Description, "No ") {
 		t.Error("empty list should show the 'none configured' message")
 	}
 }
@@ -97,7 +98,7 @@ func TestRemoveBannedWordSelectionDeletes(t *testing.T) {
 	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
 	fake := &fakeSender{}
 
-	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(), "test")
+	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(i18n.EN), "test")
 
 	if len(fs.removedWords) != 1 || fs.removedWords[0] != 7 {
 		t.Errorf("removedWords = %v, want [7]", fs.removedWords)
@@ -113,7 +114,7 @@ func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
 	fake := &fakeSender{}
 
 	// A component belonging to a different selector must be left alone.
-	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "7"), d.bannedWordRemoveSelector(), "test")
+	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "7"), d.bannedWordRemoveSelector(i18n.EN), "test")
 
 	if len(fs.removedWords) != 0 {
 		t.Errorf("unrelated component must not delete words, got %v", fs.removedWords)
@@ -149,7 +150,7 @@ func TestListBannedWordsCommandEmpty(t *testing.T) {
 	if len(fake.followups) != 1 {
 		t.Fatalf("expected 1 follow-up, got %d", len(fake.followups))
 	}
-	if !strings.Contains(fake.followups[0].Embeds[0].Description, "Aucun") {
+	if !strings.Contains(fake.followups[0].Embeds[0].Description, "No ") {
 		t.Error("empty listing should show the 'none configured' message")
 	}
 }
@@ -188,7 +189,7 @@ func TestRemoveBannedWebsiteSelectionDeletes(t *testing.T) {
 	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
 	fake := &fakeSender{}
 
-	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "3"), d.bannedWebsiteRemoveSelector(), "test")
+	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "3"), d.bannedWebsiteRemoveSelector(i18n.EN), "test")
 
 	if len(fs.removedWebsites) != 1 || fs.removedWebsites[0] != 3 {
 		t.Errorf("removedWebsites = %v, want [3]", fs.removedWebsites)
@@ -300,5 +301,28 @@ func TestSelectModeratorRolesCommand(t *testing.T) {
 
 	if len(fake.followups) != 1 {
 		t.Fatalf("expected the selection menu follow-up, got %d", len(fake.followups))
+	}
+}
+
+func TestSelectModeratorAndExcludedChannelsCommands(t *testing.T) {
+	channels := []*discordgo.Channel{{ID: "c1", Name: "general", Type: discordgo.ChannelTypeGuildText}}
+
+	for _, tc := range []struct {
+		name string
+		call func(*Discord, discordClient, *discordgo.InteractionCreate)
+	}{
+		{"moderator", (*Discord).selectModeratorChannels},
+		{"excluded", (*Discord).selectExcludedChannels},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newTestDiscordWith(&fakeStore{}, NewCache(100, 3, time.Hour))
+			fake := &fakeSender{guildChannels: channels}
+
+			tc.call(d, fake, modInteraction("set-channels"))
+
+			if len(fake.followups) != 1 {
+				t.Fatalf("expected the selection menu follow-up, got %d", len(fake.followups))
+			}
+		})
 	}
 }

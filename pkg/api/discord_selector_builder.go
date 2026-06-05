@@ -8,6 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
@@ -103,6 +104,8 @@ func (d *Discord) buildSelectMessage(
 	config SelectionConfig,
 	dbOps DatabaseOperations,
 ) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	lang := d.lang(guildID)
+
 	totalPages := (len(items) + config.ItemsPerPage - 1) / config.ItemsPerPage
 	page = max(0, min(page, totalPages-1))
 
@@ -133,19 +136,19 @@ func (d *Discord) buildSelectMessage(
 	}
 
 	// Add navigation buttons
-	buttons := d.buildNavigationButtons(page, totalPages, config.Prefix)
+	buttons := d.buildNavigationButtons(lang, page, totalPages, config.Prefix)
 	if len(buttons) > 0 {
 		components = append(components, discordgo.ActionsRow{Components: buttons})
 	}
 
-	description := fmt.Sprintf("%s\n\n**%d**/**%d** item sélectionnés.",
-		config.Description, len(previouslySelected), len(items))
+	description := config.Description + "\n\n" +
+		i18n.T(lang, "selector.items_selected", len(previouslySelected), len(items))
 
 	embed := &discordgo.MessageEmbed{
 		Title:       config.Title,
 		Description: description,
 		Color:       model.Blue.Int(),
-		Footer:      model.SelectionMenuFooter,
+		Footer:      selectionFooter(lang),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -189,25 +192,25 @@ func (d *Discord) buildSelectMenuOptions(
 }
 
 // buildNavigationButtons builds the navigation buttons
-func (d *Discord) buildNavigationButtons(page, totalPages int, prefix string) []discordgo.MessageComponent {
+func (d *Discord) buildNavigationButtons(lang i18n.Lang, page, totalPages int, prefix string) []discordgo.MessageComponent {
 	var buttons []discordgo.MessageComponent
 
 	if totalPages > 1 {
 		buttons = append(buttons,
 			discordgo.Button{
-				Label:    "◀️ Précédent",
+				Label:    i18n.T(lang, "button.prev"),
 				Style:    discordgo.PrimaryButton,
 				CustomID: fmt.Sprintf("%s_page_prev_%d", prefix, page),
 				Disabled: page == 0,
 			},
 			discordgo.Button{
-				Label:    fmt.Sprintf("Page %d/%d", page+1, totalPages),
+				Label:    i18n.T(lang, "button.page", page+1, totalPages),
 				Style:    discordgo.SecondaryButton,
 				CustomID: "page_indicator",
 				Disabled: true,
 			},
 			discordgo.Button{
-				Label:    "Suivant ▶️",
+				Label:    i18n.T(lang, "button.next"),
 				Style:    discordgo.PrimaryButton,
 				CustomID: fmt.Sprintf("%s_page_next_%d", prefix, page),
 				Disabled: page == totalPages-1,
@@ -217,7 +220,7 @@ func (d *Discord) buildNavigationButtons(page, totalPages int, prefix string) []
 
 	// Always add the done button
 	buttons = append(buttons, discordgo.Button{
-		Label:    "✅ Terminer",
+		Label:    i18n.T(lang, "button.done"),
 		Style:    discordgo.SuccessButton,
 		CustomID: fmt.Sprintf("%s_select_done", prefix),
 	})
@@ -250,7 +253,7 @@ func (d *Discord) handleSelection(
 	// Respond immediately for all interactions
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{Content: "Mise à jour..."},
+		Data: &discordgo.InteractionResponseData{Content: i18n.T(d.lang(i.GuildID), "selector.updating")},
 	}); err != nil {
 		d.logError(i.GuildID, "handleSelection()", "Error responding to interaction: %s", err)
 		return
@@ -387,7 +390,7 @@ func (d *Discord) handleSelectionDone(
 
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{{
-			Title:       "Configuration terminée",
+			Title:       i18n.T(d.lang(i.GuildID), "selector.config_done_title"),
 			Description: description,
 			Color:       model.Green.Int(),
 			Timestamp:   time.Now().UTC().Format(time.RFC3339),
@@ -536,12 +539,13 @@ func (a *AutomodSettingsDB) Add(guildID, itemID string) error {
 	return a.db.SetAutomoderationSettings(guildID, settings)
 }
 
-func (d *Discord) sendErrorMessage(s discordClient, i *discordgo.Interaction, title, description string) {
+func (d *Discord) sendErrorMessage(s discordClient, i *discordgo.Interaction, lang i18n.Lang, title, description string) {
 	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{{
 			Title:       title,
 			Description: description,
 			Color:       model.Red.Int(),
+			Footer:      hintFooter(lang),
 			Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		}},
 	})

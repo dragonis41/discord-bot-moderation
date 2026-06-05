@@ -8,6 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
@@ -159,10 +160,11 @@ func containsURL(content string) bool {
 //	author (at or above it). It returns true once handled so the caller stops
 //	running further checks.
 //
-//	cause completes the sentence "...a été supprimé car {cause}", ruleReason is
-//	the reason logged/sent for the action, and logSubject describes the match in
-//	the internal info log.
-func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message, checkName, cause, ruleReason, logSubject string) bool {
+//	lang is the guild's language; cause completes the "your message was deleted
+//	because {cause}" sentence (already localized by the caller), ruleReason is the
+//	reason logged/sent for the action, and logSubject describes the match in the
+//	internal info log.
+func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message, lang i18n.Lang, checkName, cause, ruleReason, logSubject string) bool {
 	// Skip if the user is already being banned by a concurrent handler.
 	if d.cache.IsUserPendingBan(m.GuildID, m.Author.ID) {
 		return true
@@ -172,11 +174,7 @@ func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message
 	guildName := guildNameByID(s, m.GuildID)
 
 	// Warn the user and send back a copy of their message.
-	warning := fmt.Sprintf(
-		"⚠️ **Avertissement %d/%d**\n"+
-			"Votre message sur le serveur [%s] a été supprimé car %s\n\n"+
-			"Voici une copie de votre message :\n",
-		violationCount, d.cache.violationThreshold, guildName, cause)
+	warning := i18n.T(lang, "automod.warning", violationCount, d.cache.violationThreshold, guildName, cause)
 	d.sendPrivateMessage(s, m, warning)
 	for _, part := range utils.SplitMessage(m.Content, 1900) {
 		d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", part))
@@ -185,14 +183,14 @@ func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message
 	if violationCount < d.cache.violationThreshold {
 		// Below threshold: log and delete the message.
 		d.logAutomoderationAction(s, m, model.ActionDeleteMessage, checkName, ruleReason)
-		d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, fmt.Sprintf("%s (violation %d/%d)", ruleReason, violationCount, d.cache.violationThreshold))
+		d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, i18n.T(lang, "automod.violation_suffix", ruleReason, violationCount, d.cache.violationThreshold))
 	} else {
 		// Threshold reached: ban the user, guarding against concurrent bans.
 		if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
 			return true
 		}
 		d.logAutomoderationAction(s, m, model.ActionBan, checkName, ruleReason)
-		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("%s\n%d automod violations", ruleReason, violationCount))
+		d.takeAutomoderationAction(s, m, model.ActionBan, i18n.T(lang, "automod.ban_reason", ruleReason, violationCount))
 	}
 
 	d.logInfo(m.GuildID, checkName, "Deleted message from %s containing %s (violation %d/%d)",
@@ -234,9 +232,10 @@ func (d *Discord) checkBannedWords(s discordSender, m *discordgo.Message) bool {
 		}
 
 		if matched {
-			return d.escalateContentViolation(s, m, "banned_word_check",
-				fmt.Sprintf("il contient le mot `%s`", bannedWord.WordPattern),
-				fmt.Sprintf("Le mot `%s` est banni", bannedWord.WordPattern),
+			lang := d.lang(m.GuildID)
+			return d.escalateContentViolation(s, m, lang, "banned_word_check",
+				i18n.T(lang, "automod.cause_banned_word", bannedWord.WordPattern),
+				i18n.T(lang, "automod.reason_banned_word", bannedWord.WordPattern),
 				fmt.Sprintf("banned word: [%s]", bannedWord.WordPattern))
 		}
 	}
@@ -276,9 +275,10 @@ func (d *Discord) checkBannedWebsites(s discordSender, m *discordgo.Message) boo
 
 	for _, bannedWebsite := range bannedWebsites {
 		if bannedWebsiteMatches(m.Content, bannedWebsite) {
-			return d.escalateContentViolation(s, m, "banned_website_check",
-				fmt.Sprintf("il contient un lien interdit : `%s`", bannedWebsite.WebsiteURL),
-				fmt.Sprintf("Le site `%s` est banni", bannedWebsite.WebsiteURL),
+			lang := d.lang(m.GuildID)
+			return d.escalateContentViolation(s, m, lang, "banned_website_check",
+				i18n.T(lang, "automod.cause_banned_website", bannedWebsite.WebsiteURL),
+				i18n.T(lang, "automod.reason_banned_website", bannedWebsite.WebsiteURL),
 				fmt.Sprintf("banned website: [%s]", bannedWebsite.WebsiteURL))
 		}
 	}
@@ -332,8 +332,10 @@ func (d *Discord) checkMessageSpam(s discordSender, m *discordgo.Message) bool {
 			return true
 		}
 		// Log and ban the user
-		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
-		d.takeAutomoderationAction(s, m, model.ActionBan, fmt.Sprintf("Spam (message répété %d fois dans %d salons en %s)", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow()))
+		lang := d.lang(m.GuildID)
+		spamReason := i18n.T(lang, "automod.spam_reason", duplicateCount, len(channelsUsed), d.cache.GetViolationWindow())
+		d.logAutomoderationAction(s, m, model.ActionBan, "spam_detection", spamReason)
+		d.takeAutomoderationAction(s, m, model.ActionBan, spamReason)
 
 		d.logSuccess(m.GuildID, "checkMessageSpam()", "Banned user %s for cross-channel spam (%d duplicate messages across %d channels)", m.Author.Username, duplicateCount, len(channelsUsed))
 

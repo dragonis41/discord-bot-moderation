@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
@@ -17,6 +18,8 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	if !d.deferEphemeral(s, i, "reportUser()") {
 		return
 	}
+
+	lang := d.lang(i.GuildID)
 
 	var reportedUser *discordgo.User
 	reason := ""
@@ -31,8 +34,12 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	if reportedUser == nil {
 		d.logError(i.GuildID, "reportUser()", "Reported user is nil")
-		d.followup(s, i, "reportUser()", errorEmbed("Report", "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer."))
+		d.followup(s, i, "reportUser()", errorEmbed(lang, i18n.T(lang, "report.title"), i18n.T(lang, "report.user_not_found")))
 		return
+	}
+
+	if reason == "" {
+		reason = i18n.T(lang, "report.no_reason")
 	}
 
 	d.logInfo(i.GuildID, "reportUser()", "Got command [%s] from user [%s] to report the user [%s] for the reason [%s]",
@@ -48,7 +55,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		d.logError(i.GuildID, "reportUser()", "Error fetching moderation roles from database: %s", err)
 	} else if len(modRoles) == 0 {
 		d.logError(i.GuildID, "reportUser()", "No moderation roles configured for this guild")
-		d.followup(s, i, "reportUser()", errorEmbed("Report", "Aucun rôle de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur."))
+		d.followup(s, i, "reportUser()", errorEmbed(lang, i18n.T(lang, "report.title"), i18n.T(lang, "report.no_mod_roles")))
 		return
 	}
 	modRoleMentions := ""
@@ -59,23 +66,19 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 	selectedChannels, err := d.db.GetModerationChannelsByGuildId(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "reportUser()", "Error fetching moderation channels from database: %s", err)
-		d.followup(s, i, "reportUser()", errorEmbed("Report", "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur."))
+		d.followup(s, i, "reportUser()", errorEmbed(lang, i18n.T(lang, "report.title"), i18n.T(lang, "report.error_generic")))
 		return
 	}
 	if len(selectedChannels) == 0 {
 		d.logError(i.GuildID, "reportUser()", "No moderation channels configured for this guild")
-		d.followup(s, i, "reportUser()", errorEmbed("Report", "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur."))
+		d.followup(s, i, "reportUser()", errorEmbed(lang, i18n.T(lang, "report.title"), i18n.T(lang, "report.no_mod_channels")))
 		return
 	}
 
 	// Get recent messages from the reported user
 	messages := d.getUserRecentMessagesString(i.GuildID, reportedUser, 10)
 
-	description := truncate(fmt.Sprintf(
-		"**Utilisateur signalé**: <@!%s> (%s | %s)\n"+
-			"**Salon**: <#%s>\n"+
-			"**Raison**: %s\n\n"+
-			"**Messages récents**:\n%s",
+	description := truncate(i18n.T(lang, "report.description",
 		reportedUser.ID, reportedUser.Username, reportedUser.ID, i.ChannelID, reason, messages,
 	), maxEmbedDescriptionLength)
 
@@ -84,10 +87,10 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 			Content:    modRoleMentions,
 			Components: buildReportActionButtons(reportedUser.ID),
 			Embed: &discordgo.MessageEmbed{
-				Title:       fmt.Sprintf("🚨 Nouveau signalement par %s", i.Member.User.Username),
+				Title:       i18n.T(lang, "report.alert_title", i.Member.User.Username),
 				Description: description,
 				Color:       model.Red.Int(),
-				Footer:      &discordgo.MessageEmbedFooter{Text: "Aucune action n'a encore été prise."},
+				Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.alert_footer")},
 			},
 		})
 		if err != nil {
@@ -98,10 +101,10 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	// Tell the user that the report has been received
 	d.followup(s, i, "reportUser()", &discordgo.MessageEmbed{
-		Title:       "Report",
-		Description: fmt.Sprintf("L'utilisateur %s a été signalé à la moderation", reportedUser.Username),
+		Title:       i18n.T(lang, "report.title"),
+		Description: i18n.T(lang, "report.received", reportedUser.Username),
 		Color:       model.Green.Int(),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Merci de rendre ce serveur plus sain."},
+		Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.received_footer")},
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 }
@@ -113,6 +116,8 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	d.logCommand(i, "showHelp()")
 
+	lang := d.lang(i.GuildID)
+
 	commands, err := s.ApplicationCommands(d.client.State.User.ID, i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "showHelp()", "Error fetching application commands: %s", err)
@@ -122,7 +127,7 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 	for _, cmd := range commands {
 		value := fmt.Sprintf("%s\n", cmd.Description)
 		if len(cmd.Options) > 0 {
-			value += "**Options**:\n"
+			value += i18n.T(lang, "help.options_label") + "\n"
 			var requiredOptions string
 			var optionalOptions string
 			for _, option := range cmd.Options {
@@ -133,10 +138,10 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 				}
 			}
 			if len(requiredOptions) > 0 {
-				value += fmt.Sprintf("**Requis :**\n%s", requiredOptions)
+				value += i18n.T(lang, "help.required_label") + "\n" + requiredOptions
 			}
 			if len(optionalOptions) > 0 {
-				value += fmt.Sprintf("**Optionel :**\n%s", optionalOptions)
+				value += i18n.T(lang, "help.optional_label") + "\n" + optionalOptions
 			}
 		}
 
@@ -148,8 +153,8 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 	}
 
 	d.followup(s, i, "showHelp()", &discordgo.MessageEmbed{
-		Title:       "💡 Help",
-		Description: "Voici la liste des commandes disponibles :",
+		Title:       i18n.T(lang, "help.title"),
+		Description: i18n.T(lang, "help.description"),
 		Color:       model.Blue.Int(),
 		Fields:      fields,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),

@@ -6,9 +6,23 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
+
+// Translation helpers -------------------------------------------------------
+
+// lang resolves the language configured for a guild, falling back to the
+// default language if the lookup fails.
+func (d *Discord) lang(guildID string) i18n.Lang {
+	code, err := d.db.GetGuildLanguage(guildID)
+	if err != nil {
+		d.logWarning(guildID, "lang()", "Failed to fetch guild language, using default: %s", err)
+		return i18n.Default
+	}
+	return i18n.Parse(code)
+}
 
 // Logging helpers -----------------------------------------------------------
 //
@@ -37,26 +51,36 @@ func (d *Discord) logWarning(guildID, function, format string, args ...any) {
 // The vast majority of embeds sent by command handlers share the same shape:
 // a title, a description, a color, the default footer and a UTC timestamp.
 
-func embed(title, description string, color model.Color) *discordgo.MessageEmbed {
+func embed(lang i18n.Lang, title, description string, color model.Color) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
 		Color:       color.Int(),
-		Footer:      model.DefaultFooter,
+		Footer:      hintFooter(lang),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
-func errorEmbed(title, description string) *discordgo.MessageEmbed {
-	return embed(title, description, model.Red)
+func errorEmbed(lang i18n.Lang, title, description string) *discordgo.MessageEmbed {
+	return embed(lang, title, description, model.Red)
 }
 
-func successEmbed(title, description string) *discordgo.MessageEmbed {
-	return embed(title, description, model.Green)
+func successEmbed(lang i18n.Lang, title, description string) *discordgo.MessageEmbed {
+	return embed(lang, title, description, model.Green)
 }
 
-func infoEmbed(title, description string) *discordgo.MessageEmbed {
-	return embed(title, description, model.Blue)
+func infoEmbed(lang i18n.Lang, title, description string) *discordgo.MessageEmbed {
+	return embed(lang, title, description, model.Blue)
+}
+
+// hintFooter returns the localized "use /help" footer shown on most embeds.
+func hintFooter(lang i18n.Lang) *discordgo.MessageEmbedFooter {
+	return &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "footer.hint")}
+}
+
+// selectionFooter returns the localized footer shown on live selection menus.
+func selectionFooter(lang i18n.Lang) *discordgo.MessageEmbedFooter {
+	return &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "footer.selection_saved")}
 }
 
 // truncate shortens s to at most max characters, appending "..." when it had to

@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 )
 
 type DiscordSettingsFunctionInterface interface {
@@ -15,13 +16,15 @@ func (d *Discord) selectLogChannels(s discordClient, i *discordgo.InteractionCre
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	items, err := d.getTextChannelsAsItems(s, i.GuildID)
 	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
+		d.sendErrorMessage(s, i.Interaction, lang, i18n.T(lang, "selector.error_channels_title"), i18n.T(lang, "selector.error_channels"))
 		return
 	}
 
-	config, dbOps := d.getLogChannelConfig()
+	config, dbOps := d.getLogChannelConfig(lang)
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
@@ -30,13 +33,15 @@ func (d *Discord) selectModeratorChannels(s discordClient, i *discordgo.Interact
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	items, err := d.getTextChannelsAsItems(s, i.GuildID)
 	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
+		d.sendErrorMessage(s, i.Interaction, lang, i18n.T(lang, "selector.error_channels_title"), i18n.T(lang, "selector.error_channels"))
 		return
 	}
 
-	config, dbOps := d.getModChannelConfig()
+	config, dbOps := d.getModChannelConfig(lang)
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
@@ -45,13 +50,15 @@ func (d *Discord) selectExcludedChannels(s discordClient, i *discordgo.Interacti
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	items, err := d.getTextChannelsAsItems(s, i.GuildID)
 	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des salons", "Une erreur est survenue lors de la récupération des salons.")
+		d.sendErrorMessage(s, i.Interaction, lang, i18n.T(lang, "selector.error_channels_title"), i18n.T(lang, "selector.error_channels"))
 		return
 	}
 
-	config, dbOps := d.getExcludedChannelConfig()
+	config, dbOps := d.getExcludedChannelConfig(lang)
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }
 
@@ -60,12 +67,14 @@ func (d *Discord) selectModeratorRoles(s discordClient, i *discordgo.Interaction
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	items, err := d.getRolesAsItems(s, i.GuildID)
 	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Sélection des roles", "Une erreur est survenue lors de la récupération des roles.")
+		d.sendErrorMessage(s, i.Interaction, lang, i18n.T(lang, "selector.error_roles_title"), i18n.T(lang, "selector.error_roles"))
 		return
 	}
 
-	config, dbOps := d.getModRoleConfig()
+	config, dbOps := d.getModRoleConfig(lang)
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }

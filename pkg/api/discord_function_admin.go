@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
@@ -28,11 +29,13 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	var fields []*discordgo.MessageEmbedField
 
 	// Uptime
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "Uptime",
+		Name:   i18n.T(lang, "status.uptime"),
 		Value:  utils.GetUptime(),
 		Inline: false,
 	})
@@ -43,20 +46,20 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		connectedServers += fmt.Sprintf("- [%s] (ID: %s)\n", d.guildDisplayName(guild), guild.ID)
 	}
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "Serveurs connectés",
-		Value:  fmt.Sprintf("%d serveurs :\n%s", len(s.State.Guilds), connectedServers),
+		Name:   i18n.T(lang, "status.servers"),
+		Value:  i18n.T(lang, "status.servers_value", len(s.State.Guilds), connectedServers),
 		Inline: false,
 	})
 
 	// CPU and RAM Usage
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "Utilisation CPU",
+		Name:   i18n.T(lang, "status.cpu"),
 		Value:  utils.GetCPUUsage(),
 		Inline: true,
 	})
 
 	fields = append(fields, &discordgo.MessageEmbedField{
-		Name:   "Utilisation mémoire",
+		Name:   i18n.T(lang, "status.memory"),
 		Value:  utils.GetMemoryUsage(),
 		Inline: false,
 	})
@@ -67,7 +70,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Add specific detailed stats as separate fields
 	if goroutines, ok := detailedStats["Goroutines"]; ok {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Goroutines",
+			Name:   i18n.T(lang, "status.goroutines"),
 			Value:  goroutines,
 			Inline: true,
 		})
@@ -75,7 +78,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	if rss, ok := detailedStats["RSS Memory"]; ok {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Mémoire RSS",
+			Name:   i18n.T(lang, "status.rss"),
 			Value:  rss,
 			Inline: true,
 		})
@@ -86,7 +89,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 		maxEntries, err := d.db.GetMaxSystemLogEntries(i.GuildID)
 		if err == nil {
 			fields = append(fields, &discordgo.MessageEmbedField{
-				Name:   "Log entries",
+				Name:   i18n.T(lang, "status.log_entries"),
 				Value:  fmt.Sprintf("%d/%d", nbEntries, maxEntries),
 				Inline: false,
 			})
@@ -102,7 +105,7 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 
 		if errorMessages := joinLinesWithLimit(lines, 950); errorMessages != "" {
 			fields = append(fields, &discordgo.MessageEmbedField{
-				Name:   "5 dernières erreurs",
+				Name:   i18n.T(lang, "status.last_errors"),
 				Value:  errorMessages,
 				Inline: false,
 			})
@@ -110,10 +113,10 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	d.followup(s, i, "showStatus()", &discordgo.MessageEmbed{
-		Title:     "Status",
+		Title:     i18n.T(lang, "status.title"),
 		Color:     model.Green.Int(),
 		Fields:    fields,
-		Footer:    model.DefaultFooter,
+		Footer:    hintFooter(lang),
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	})
 }
@@ -123,6 +126,8 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	limit := 10
 	for _, option := range i.ApplicationCommandData().Options {
 		if option.Name == "limit" {
@@ -130,19 +135,19 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 		}
 	}
 	if limit <= 0 || limit > 100 {
-		d.followup(s, i, "getMessageHistory()", errorEmbed("Message History", "La limite doit être comprise entre 1 et 100."))
+		d.followup(s, i, "getMessageHistory()", errorEmbed(lang, i18n.T(lang, "history.title"), i18n.T(lang, "history.limit_error")))
 		return
 	}
 
 	// Get the message history from the cache
 	historyMessages := d.cache.GetGuildRecentMessages(i.GuildID, limit)
 	if len(historyMessages) == 0 {
-		d.followup(s, i, "getMessageHistory()", errorEmbed("Message History", "Aucun message en cache pour ce serveur."))
+		d.followup(s, i, "getMessageHistory()", errorEmbed(lang, i18n.T(lang, "history.title"), i18n.T(lang, "history.empty")))
 		return
 	}
 
 	// Format the messages and send them as an attachment
-	messageContent := fmt.Sprintf("Derniers %d messages en cache :\n\n", limit)
+	messageContent := i18n.T(lang, "history.header", limit)
 	for _, msg := range historyMessages {
 		// Use cached username
 		username := msg.AuthorUsername
@@ -203,17 +208,19 @@ func (d *Discord) getBotLogs(s discordClient, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	nbEntries, err := d.db.GetSystemLogEntriesCount(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "getBotLogs()", "Error getting system log entries count: %s", err)
-		d.followup(s, i, "getBotLogs()", errorEmbed("Bot logs", "Erreur lors de la récupération des logs du bot."))
+		d.followup(s, i, "getBotLogs()", errorEmbed(lang, i18n.T(lang, "logs.bot_title"), i18n.T(lang, "logs.bot_error")))
 		return
 	}
 
 	maxEntries, err := d.db.GetMaxSystemLogEntries(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "getBotLogs()", "Error getting max system log entries: %s", err)
-		d.followup(s, i, "getBotLogs()", errorEmbed("Bot logs", "Erreur lors de la récupération des logs du bot."))
+		d.followup(s, i, "getBotLogs()", errorEmbed(lang, i18n.T(lang, "logs.bot_title"), i18n.T(lang, "logs.bot_error")))
 		return
 	}
 
@@ -224,7 +231,7 @@ func (d *Discord) getBotLogs(s discordClient, i *discordgo.InteractionCreate) {
 			formatDiscordTimestamp(entry.CreatedAt), entry.Function, entry.Content))
 	}
 
-	d.followupLogEmbed(s, i, "getBotLogs()", "Bot logs", nbEntries, maxEntries, lines, "Aucun log trouvé.")
+	d.followupLogEmbed(s, i, lang, "getBotLogs()", i18n.T(lang, "logs.bot_title"), nbEntries, maxEntries, lines, i18n.T(lang, "logs.bot_empty"))
 }
 
 func (d *Discord) getModerationLogs(s discordClient, i *discordgo.InteractionCreate) {
@@ -232,17 +239,19 @@ func (d *Discord) getModerationLogs(s discordClient, i *discordgo.InteractionCre
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	nbEntries, err := d.db.GetModerationLogEntriesCount(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "getModerationLogs()", "Error getting mod log entries count: %s", err)
-		d.followup(s, i, "getModerationLogs()", errorEmbed("Logs de modération", "Erreur lors de la récupération des logs de modération."))
+		d.followup(s, i, "getModerationLogs()", errorEmbed(lang, i18n.T(lang, "logs.mod_title"), i18n.T(lang, "logs.mod_error")))
 		return
 	}
 
 	maxEntries, err := d.db.GetMaxModerationLogEntries(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "getModerationLogs()", "Error getting max moderation log entries: %s", err)
-		d.followup(s, i, "getModerationLogs()", errorEmbed("Logs de modération", "Erreur lors de la récupération des logs de modération."))
+		d.followup(s, i, "getModerationLogs()", errorEmbed(lang, i18n.T(lang, "logs.mod_title"), i18n.T(lang, "logs.mod_error")))
 		return
 	}
 
@@ -254,7 +263,7 @@ func (d *Discord) getModerationLogs(s discordClient, i *discordgo.InteractionCre
 			formatDiscordTimestamp(entry.CreatedAt), entry.Action, entry.UserID, entry.Username, entry.UserID, entry.Reason))
 	}
 
-	d.followupLogEmbed(s, i, "getModerationLogs()", "Logs de modération", nbEntries, maxEntries, lines, "Aucun log de modération trouvé.")
+	d.followupLogEmbed(s, i, lang, "getModerationLogs()", i18n.T(lang, "logs.mod_title"), nbEntries, maxEntries, lines, i18n.T(lang, "logs.mod_empty"))
 }
 
 // followupLogEmbed sends the standard log-listing embed: a green embed whose
@@ -262,7 +271,7 @@ func (d *Discord) getModerationLogs(s discordClient, i *discordgo.InteractionCre
 // rendered into the embed description (4096 chars) rather than a field (1024),
 // so it holds roughly four times more before truncating. emptyMessage is shown
 // when there are no log lines.
-func (d *Discord) followupLogEmbed(s discordClient, i *discordgo.InteractionCreate, function, title string, count, max int, lines []string, emptyMessage string) {
+func (d *Discord) followupLogEmbed(s discordClient, i *discordgo.InteractionCreate, lang i18n.Lang, function, title string, count, max int, lines []string, emptyMessage string) {
 	// Reserve a little room for the "count/max" header so the joined log lines
 	// can use the rest of the 4096-char description budget.
 	const headerMargin = 96
@@ -272,13 +281,13 @@ func (d *Discord) followupLogEmbed(s discordClient, i *discordgo.InteractionCrea
 		body = joinLinesWithLimit(lines, maxEmbedDescriptionLength-headerMargin)
 	}
 
-	description := truncate(fmt.Sprintf("**Derniers logs** (%d/%d)\n\n%s", count, max, body), maxEmbedDescriptionLength)
+	description := truncate(i18n.T(lang, "logs.latest", count, max, body), maxEmbedDescriptionLength)
 
 	d.followup(s, i, function, &discordgo.MessageEmbed{
 		Title:       title,
 		Color:       model.Green.Int(),
 		Description: description,
-		Footer:      model.DefaultFooter,
+		Footer:      hintFooter(lang),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 )
 
 // fakeDBOps is a configurable DatabaseOperations for selector tests.
@@ -48,13 +50,13 @@ func TestBuildNavigationButtons(t *testing.T) {
 	d := newTestDiscord()
 
 	// Single page: only the "done" button.
-	single := d.buildNavigationButtons(0, 1, "p")
+	single := d.buildNavigationButtons(i18n.EN, 0, 1, "p")
 	if len(single) != 1 {
 		t.Fatalf("single page = %d buttons, want 1 (done only)", len(single))
 	}
 
 	// Multi page, first page: prev + indicator + next + done.
-	first := d.buildNavigationButtons(0, 3, "p")
+	first := d.buildNavigationButtons(i18n.EN, 0, 3, "p")
 	if len(first) != 4 {
 		t.Fatalf("multi page = %d buttons, want 4", len(first))
 	}
@@ -66,7 +68,7 @@ func TestBuildNavigationButtons(t *testing.T) {
 	}
 
 	// Multi page, last page: next disabled.
-	last := d.buildNavigationButtons(2, 3, "p")
+	last := d.buildNavigationButtons(i18n.EN, 2, 3, "p")
 	if !last[2].(discordgo.Button).Disabled {
 		t.Error("next button should be disabled on the last page")
 	}
@@ -106,7 +108,7 @@ func TestSelectorConfigGetters(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		get    func() (SelectionConfig, DatabaseOperations)
+		get    func(i18n.Lang) (SelectionConfig, DatabaseOperations)
 		prefix string
 	}{
 		{"log", d.getLogChannelConfig, "log_channel"},
@@ -117,7 +119,7 @@ func TestSelectorConfigGetters(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			config, dbOps := tc.get()
+			config, dbOps := tc.get(i18n.EN)
 			if config.Prefix != tc.prefix {
 				t.Errorf("prefix = %q, want %q", config.Prefix, tc.prefix)
 			}
@@ -179,5 +181,95 @@ func TestSelectionItemAccessors(t *testing.T) {
 	feat := AutomodFeatureItem{ID: "f", Name: "Feat", Description: "desc"}
 	if feat.GetID() != "f" || feat.GetName() != "Feat" || feat.GetDescription() != "desc" {
 		t.Error("AutomodFeatureItem accessors wrong")
+	}
+}
+
+// --- DatabaseOperations wrappers ---------------------------------------------
+
+func TestAutomodSettingsDBGetSelected(t *testing.T) {
+	fs := &fakeStore{settings: &database.AutomoderationSettings{
+		BannedWordsEnabled:   true,
+		SpamDetectionEnabled: true,
+		// BannedWebsitesEnabled stays false
+	}}
+	ops := &AutomodSettingsDB{db: fs}
+
+	sel, err := ops.GetSelected("g1")
+	if err != nil {
+		t.Fatalf("GetSelected: %v", err)
+	}
+	got := map[string]bool{}
+	for _, s := range sel {
+		got[s] = true
+	}
+	if !got["banned_words"] || !got["spam_detection"] {
+		t.Errorf("expected banned_words + spam_detection enabled, got %v", sel)
+	}
+	if got["banned_websites"] {
+		t.Errorf("banned_websites should not be reported as enabled, got %v", sel)
+	}
+}
+
+func TestAutomodSettingsDBAddEnablesFeature(t *testing.T) {
+	fs := &fakeStore{settings: &database.AutomoderationSettings{}}
+	ops := &AutomodSettingsDB{db: fs}
+
+	if err := ops.Add("g1", "banned_words"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if len(fs.savedSettings) != 1 || !fs.savedSettings[0].BannedWordsEnabled {
+		t.Errorf("Add should enable banned_words, savedSettings=%+v", fs.savedSettings)
+	}
+}
+
+func TestAutomodSettingsDBRemoveByGuildDisablesAll(t *testing.T) {
+	fs := &fakeStore{}
+	ops := &AutomodSettingsDB{db: fs}
+
+	if err := ops.RemoveByGuild("g1"); err != nil {
+		t.Fatalf("RemoveByGuild: %v", err)
+	}
+	if len(fs.savedSettings) != 1 {
+		t.Fatalf("expected one saved settings, got %d", len(fs.savedSettings))
+	}
+	s := fs.savedSettings[0]
+	if s.BannedWordsEnabled || s.BannedWebsitesEnabled || s.SpamDetectionEnabled {
+		t.Errorf("RemoveByGuild should disable everything, got %+v", s)
+	}
+}
+
+// GetSelected for the channel/role wrappers is a thin pass-through; verify the
+// delegation returns what the store holds.
+func TestChannelAndRoleDBOpsGetSelected(t *testing.T) {
+	fs := &fakeStore{
+		logChannels: []string{"l1"},
+		modChannels: []string{"m1"},
+		excluded:    map[string]bool{}, // GetExcluded uses its own method below
+		modRoles:    []string{"r1"},
+	}
+
+	if got, _ := (&LogChannelDB{db: fs}).GetSelected("g1"); len(got) != 1 || got[0] != "l1" {
+		t.Errorf("LogChannelDB.GetSelected = %v, want [l1]", got)
+	}
+	if got, _ := (&ModChannelDB{db: fs}).GetSelected("g1"); len(got) != 1 || got[0] != "m1" {
+		t.Errorf("ModChannelDB.GetSelected = %v, want [m1]", got)
+	}
+	if got, _ := (&ModRoleDB{db: fs}).GetSelected("g1"); len(got) != 1 || got[0] != "r1" {
+		t.Errorf("ModRoleDB.GetSelected = %v, want [r1]", got)
+	}
+}
+
+func TestSendErrorMessage(t *testing.T) {
+	d := newTestDiscord()
+	fake := &fakeSender{}
+	i := &discordgo.Interaction{GuildID: "g1"}
+
+	d.sendErrorMessage(fake, i, i18n.EN, "Title", "something failed")
+
+	if len(fake.followups) != 1 {
+		t.Fatalf("expected 1 error follow-up, got %d", len(fake.followups))
+	}
+	if len(fake.followups[0].Embeds) == 0 || fake.followups[0].Embeds[0].Title != "Title" {
+		t.Error("error follow-up should carry the titled embed")
 	}
 }

@@ -1,10 +1,10 @@
 package api
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 )
 
 type DiscordAutomodCommandsInterface interface {
@@ -25,6 +25,8 @@ func (d *Discord) addBannedWord(s discordClient, i *discordgo.InteractionCreate)
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	wordPattern := ""
 	isRegex := false
 	for _, option := range i.ApplicationCommandData().Options {
@@ -37,23 +39,23 @@ func (d *Discord) addBannedWord(s discordClient, i *discordgo.InteractionCreate)
 	}
 
 	if wordPattern == "" {
-		d.followup(s, i, "addBannedWord()", errorEmbed("Mot interdit", "Le mot ne peut pas être vide."))
+		d.followup(s, i, "addBannedWord()", errorEmbed(lang, i18n.T(lang, "bannedword.title"), i18n.T(lang, "bannedword.empty_word")))
 		return
 	}
 
 	if err := d.db.AddBannedWord(i.GuildID, wordPattern, isRegex); err != nil {
 		d.logError(i.GuildID, "addBannedWord()", "Error adding banned word to database: %s", err)
-		d.followup(s, i, "addBannedWord()", errorEmbed("Mot interdit", "Une erreur est survenue lors de l'ajout du mot interdit."))
+		d.followup(s, i, "addBannedWord()", errorEmbed(lang, i18n.T(lang, "bannedword.title"), i18n.T(lang, "bannedword.add_error")))
 		return
 	}
 
-	wordType := "littéral"
+	wordType := i18n.T(lang, "bannedword.type_literal")
 	if isRegex {
-		wordType = "regex"
+		wordType = i18n.T(lang, "bannedword.type_regex")
 	}
 
-	d.followup(s, i, "addBannedWord()", successEmbed("✅ Mot interdit ajouté",
-		fmt.Sprintf("Le mot `%s` (type: %s) a été ajouté à la liste des mots interdits.", wordPattern, wordType)))
+	d.followup(s, i, "addBannedWord()", successEmbed(lang, i18n.T(lang, "bannedword.added_title"),
+		i18n.T(lang, "bannedword.added", wordPattern, wordType)))
 }
 
 // removeBannedWord opens a paginated dropdown of the guild's banned words so the
@@ -65,7 +67,7 @@ func (d *Discord) removeBannedWord(s discordClient, i *discordgo.InteractionCrea
 		return
 	}
 
-	d.startRemoveSelection(s, i, d.bannedWordRemoveSelector(), "removeBannedWord()")
+	d.startRemoveSelection(s, i, d.bannedWordRemoveSelector(d.lang(i.GuildID)), "removeBannedWord()")
 }
 
 func (d *Discord) listBannedWords(s discordClient, i *discordgo.InteractionCreate) {
@@ -73,35 +75,39 @@ func (d *Discord) listBannedWords(s discordClient, i *discordgo.InteractionCreat
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	bannedWords, err := d.db.GetBannedWordsByGuildId(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "listBannedWords()", "Error fetching banned words from database: %s", err)
-		d.followup(s, i, "listBannedWords()", errorEmbed("Mots interdits", "Une erreur est survenue lors de la récupération des mots interdits."))
+		d.followup(s, i, "listBannedWords()", errorEmbed(lang, i18n.T(lang, "bannedword.list_error_title"), i18n.T(lang, "bannedword.list_error")))
 		return
 	}
 
 	if len(bannedWords) == 0 {
-		d.followup(s, i, "listBannedWords()", infoEmbed("📝 Mots interdits", "Aucun mot interdit n'est configuré pour ce serveur."))
+		d.followup(s, i, "listBannedWords()", infoEmbed(lang, i18n.T(lang, "bannedword.list_empty_title"), i18n.T(lang, "bannedword.list_empty")))
 		return
 	}
 
 	var wordsList strings.Builder
 	for _, word := range bannedWords {
-		wordType := "littéral"
+		wordType := i18n.T(lang, "bannedword.type_literal")
 		if word.IsRegex {
-			wordType = "regex"
+			wordType = i18n.T(lang, "bannedword.type_regex")
 		}
-		wordsList.WriteString(fmt.Sprintf("• **ID %d**: `%s` (type: %s)\n", word.ID, word.WordPattern, wordType))
+		wordsList.WriteString(i18n.T(lang, "bannedword.list_item", word.ID, word.WordPattern, wordType))
 	}
 
-	description := fmt.Sprintf("**Total**: %d mot(s) interdit(s)\n\n%s", len(bannedWords), wordsList.String())
-	d.followup(s, i, "listBannedWords()", infoEmbed("📝 Liste des mots interdits", truncate(description, maxEmbedDescriptionLength)))
+	description := i18n.T(lang, "bannedword.list_total", len(bannedWords), wordsList.String())
+	d.followup(s, i, "listBannedWords()", infoEmbed(lang, i18n.T(lang, "bannedword.list_title"), truncate(description, maxEmbedDescriptionLength)))
 }
 
 func (d *Discord) addBannedWebsite(s discordClient, i *discordgo.InteractionCreate) {
 	if !d.beginModCommand(s, i, "addBannedWebsite()") {
 		return
 	}
+
+	lang := d.lang(i.GuildID)
 
 	websiteURL := ""
 	for _, option := range i.ApplicationCommandData().Options {
@@ -111,18 +117,18 @@ func (d *Discord) addBannedWebsite(s discordClient, i *discordgo.InteractionCrea
 	}
 
 	if websiteURL == "" {
-		d.followup(s, i, "addBannedWebsite()", errorEmbed("Site web interdit", "L'URL ne peut pas être vide."))
+		d.followup(s, i, "addBannedWebsite()", errorEmbed(lang, i18n.T(lang, "bannedsite.title"), i18n.T(lang, "bannedsite.empty_url")))
 		return
 	}
 
 	if err := d.db.AddBannedWebsite(i.GuildID, websiteURL); err != nil {
 		d.logError(i.GuildID, "addBannedWebsite()", "Error adding banned website to database: %s", err)
-		d.followup(s, i, "addBannedWebsite()", errorEmbed("Site web interdit", "Une erreur est survenue lors de l'ajout du site web interdit."))
+		d.followup(s, i, "addBannedWebsite()", errorEmbed(lang, i18n.T(lang, "bannedsite.title"), i18n.T(lang, "bannedsite.add_error")))
 		return
 	}
 
-	d.followup(s, i, "addBannedWebsite()", successEmbed("✅ Site web interdit ajouté",
-		fmt.Sprintf("Le site `%s` a été ajouté à la liste des sites web interdits.", websiteURL)))
+	d.followup(s, i, "addBannedWebsite()", successEmbed(lang, i18n.T(lang, "bannedsite.added_title"),
+		i18n.T(lang, "bannedsite.added", websiteURL)))
 }
 
 // removeBannedWebsite opens a paginated dropdown of the guild's banned websites
@@ -132,7 +138,7 @@ func (d *Discord) removeBannedWebsite(s discordClient, i *discordgo.InteractionC
 		return
 	}
 
-	d.startRemoveSelection(s, i, d.bannedWebsiteRemoveSelector(), "removeBannedWebsite()")
+	d.startRemoveSelection(s, i, d.bannedWebsiteRemoveSelector(d.lang(i.GuildID)), "removeBannedWebsite()")
 }
 
 func (d *Discord) listBannedWebsites(s discordClient, i *discordgo.InteractionCreate) {
@@ -140,25 +146,27 @@ func (d *Discord) listBannedWebsites(s discordClient, i *discordgo.InteractionCr
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	bannedWebsites, err := d.db.GetBannedWebsitesByGuildId(i.GuildID)
 	if err != nil {
 		d.logError(i.GuildID, "listBannedWebsites()", "Error fetching banned websites from database: %s", err)
-		d.followup(s, i, "listBannedWebsites()", errorEmbed("Sites web interdits", "Une erreur est survenue lors de la récupération des sites web interdits."))
+		d.followup(s, i, "listBannedWebsites()", errorEmbed(lang, i18n.T(lang, "bannedsite.list_error_title"), i18n.T(lang, "bannedsite.list_error")))
 		return
 	}
 
 	if len(bannedWebsites) == 0 {
-		d.followup(s, i, "listBannedWebsites()", infoEmbed("🌐 Sites web interdits", "Aucun site web interdit n'est configuré pour ce serveur."))
+		d.followup(s, i, "listBannedWebsites()", infoEmbed(lang, i18n.T(lang, "bannedsite.list_empty_title"), i18n.T(lang, "bannedsite.list_empty")))
 		return
 	}
 
 	var websitesList strings.Builder
 	for _, website := range bannedWebsites {
-		websitesList.WriteString(fmt.Sprintf("• **ID %d**: `%s`\n", website.ID, website.WebsiteURL))
+		websitesList.WriteString(i18n.T(lang, "bannedsite.list_item", website.ID, website.WebsiteURL))
 	}
 
-	description := fmt.Sprintf("**Total**: %d site(s) web interdit(s)\n\n%s", len(bannedWebsites), websitesList.String())
-	d.followup(s, i, "listBannedWebsites()", infoEmbed("🌐 Liste des sites web interdits", truncate(description, maxEmbedDescriptionLength)))
+	description := i18n.T(lang, "bannedsite.list_total", len(bannedWebsites), websitesList.String())
+	d.followup(s, i, "listBannedWebsites()", infoEmbed(lang, i18n.T(lang, "bannedsite.list_title"), truncate(description, maxEmbedDescriptionLength)))
 }
 
 func (d *Discord) configureAutomod(s discordClient, i *discordgo.InteractionCreate) {
@@ -166,12 +174,14 @@ func (d *Discord) configureAutomod(s discordClient, i *discordgo.InteractionCrea
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	items, err := d.getAutomoderationFeaturesAsItems(s, i.GuildID)
 	if err != nil {
-		d.sendErrorMessage(s, i.Interaction, "Configuration Automodération", "Une erreur est survenue lors de la récupération des fonctionnalités.")
+		d.sendErrorMessage(s, i.Interaction, lang, i18n.T(lang, "automodcfg.error_title"), i18n.T(lang, "automodcfg.error"))
 		return
 	}
 
-	config, dbOps := d.getAutomodSettingsConfig()
+	config, dbOps := d.getAutomodSettingsConfig(lang)
 	d.sendSelectPage(s, i.Interaction, items, 0, config, dbOps)
 }

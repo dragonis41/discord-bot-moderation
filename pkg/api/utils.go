@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
@@ -90,6 +91,7 @@ func (d *Discord) checkForGuildSetup() {
 }
 
 func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.User, limit int) string {
+	lang := d.lang(guildID)
 	recentMessages := d.cache.GetUserRecentMessages(guildID, user.ID, limit)
 	messagesText := ""
 
@@ -107,23 +109,23 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 		// Handle messages with attachments, stickers or embeds but no text
 		if content == "" {
 			if msg.AttachmentCount > 0 && msg.HasEmbeds {
-				content = fmt.Sprintf("<fichier(s): %d + embed(s)>", msg.AttachmentCount)
+				content = i18n.T(lang, "msg.files_embeds", msg.AttachmentCount)
 			} else if msg.AttachmentCount > 0 {
 				if msg.AttachmentCount == 1 {
-					content = "<fichier>"
+					content = i18n.T(lang, "msg.file")
 				} else {
-					content = fmt.Sprintf("<%d fichiers>", msg.AttachmentCount)
+					content = i18n.T(lang, "msg.files", msg.AttachmentCount)
 				}
 			} else if msg.HasEmbeds {
-				content = "<embed>"
+				content = i18n.T(lang, "msg.embed")
 			} else if len(msg.Stickers) > 0 {
 				if len(msg.Stickers) == 1 {
-					content = "<sticker>"
+					content = i18n.T(lang, "msg.sticker")
 				} else {
-					content = fmt.Sprintf("<%d stickers>", len(msg.Stickers))
+					content = i18n.T(lang, "msg.stickers", len(msg.Stickers))
 				}
 			} else {
-				content = "<message vide>"
+				content = i18n.T(lang, "msg.empty")
 			}
 		} else {
 			// Truncate overly long messages
@@ -131,9 +133,9 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 			// Add attachment indicator if message has both text and attachments
 			if msg.AttachmentCount > 0 {
 				if msg.AttachmentCount == 1 {
-					content += " [+fichier]"
+					content += i18n.T(lang, "msg.attachment_one")
 				} else {
-					content += fmt.Sprintf(" [+%d fichiers]", msg.AttachmentCount)
+					content += i18n.T(lang, "msg.attachments", msg.AttachmentCount)
 				}
 			}
 		}
@@ -141,7 +143,7 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 		line := fmt.Sprintf("%d. `%s` in <#%s>\n", idx+1, sanitizeInlineCode(content), msg.ChannelID)
 
 		if len(messagesText)+len(line) > maxRecentMessagesLength {
-			messagesText += fmt.Sprintf("... et %d message(s) de plus", len(recentMessages)-idx)
+			messagesText += i18n.T(lang, "msg.more", len(recentMessages)-idx)
 			break
 		}
 
@@ -149,7 +151,7 @@ func (d *Discord) getUserRecentMessagesString(guildID string, user *discordgo.Us
 	}
 
 	if messagesText == "" {
-		messagesText = "*Aucun message récent disponible*"
+		messagesText = i18n.T(lang, "msg.none_recent")
 	}
 
 	return messagesText
@@ -211,20 +213,17 @@ func (d *Discord) logAutomoderationAction(s discordSender, m *discordgo.Message,
 		d.logError(m.GuildID, "logAutomoderationAction()", "Error logging automod action to database: %s", err)
 	}
 
+	lang := d.lang(m.GuildID)
+
 	// Get last 10 recent messages from the user
 	recentMessages := d.getUserRecentMessagesString(m.GuildID, m.Author, 10)
 
-	description := fmt.Sprintf(
-		"**Utilisateur**: <@%s> (%s | %s)\n"+
-			"**Action**: `%s`\n"+
-			"**Triggered rule**: `%s`\n"+
-			"**Raison**: %s\n\n"+
-			"**Messages récents**: \n%s",
+	description := i18n.T(lang, "automod.alert.description",
 		m.Author.ID, m.Author.Username, m.Author.ID, action, trigger, reason, recentMessages,
 	)
 
 	embed := &discordgo.MessageEmbed{
-		Title: "🚨 Action d'automodération déclenchée",
+		Title: i18n.T(lang, "automod.alert.title"),
 		// Keep within Discord's description limit so the alert never fails to send.
 		Description: truncate(description, maxEmbedDescriptionLength),
 		Color:       model.Violet.Int(),
@@ -237,6 +236,7 @@ func (d *Discord) logAutomoderationAction(s discordSender, m *discordgo.Message,
 
 func (d *Discord) takeAutomoderationAction(s discordSender, m *discordgo.Message, action model.ModerationLogAction, reason string) {
 	guildName := guildNameByID(s, m.GuildID)
+	lang := d.lang(m.GuildID)
 
 	switch action {
 	case model.ActionDeleteMessage:
@@ -250,7 +250,7 @@ func (d *Discord) takeAutomoderationAction(s discordSender, m *discordgo.Message
 		d.sendPrivateMessage(s, m, reason)
 		return
 	case model.ActionKick:
-		message := fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] pour la raison suivante : \n*%s*", guildName, reason)
+		message := i18n.T(lang, "action.kick_dm", guildName, reason)
 		d.sendPrivateMessage(s, m, message)
 		// Kick user
 		if err := s.GuildMemberDeleteWithReason(m.GuildID, m.Author.ID, reason); err != nil {
@@ -258,7 +258,7 @@ func (d *Discord) takeAutomoderationAction(s discordSender, m *discordgo.Message
 			return
 		}
 	case model.ActionBan:
-		message := fmt.Sprintf("🔨 **Bannissement**\n\nVous avez été banni du serveur [%s] pour la raison suivante : \n*%s*", guildName, reason)
+		message := i18n.T(lang, "action.ban_dm", guildName, reason)
 		d.sendPrivateMessage(s, m, message)
 		// Permanent ban with message deletion
 		if err := s.GuildBanCreateWithReason(m.GuildID, m.Author.ID, reason, 1); err != nil {
