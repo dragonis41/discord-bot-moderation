@@ -1,7 +1,5 @@
 package model
 
-import "github.com/bwmarrin/discordgo"
-
 type SystemLogType string
 
 const (
@@ -61,9 +59,4 @@ var (
 	Blue   = Color{ansi: "\033[34m", hex: 0x0099ff}
 	Violet = Color{ansi: "\033[35m", hex: 0x9900ff}
 	Reset  = Color{ansi: "\033[0m", hex: 0xffffff}
-)
-
-var (
-	DefaultFooter       = &discordgo.MessageEmbedFooter{Text: "💡 Hint: Utilisez /help pour lister les commandes disponibles."}
-	SelectionMenuFooter = &discordgo.MessageEmbedFooter{Text: "Les sélections sont sauvegardées à chaque modification"}
 )

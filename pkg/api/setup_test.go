@@ -48,8 +48,10 @@ type fakeStore struct {
 	modLogCount    int
 	modLogMax      int
 	modLogList     []database.ModerationLogEntry
+	guildLang      string // language code returned by GetGuildLanguage ("" → default)
 
 	// Recorded writes.
+	savedLangs      []string
 	modLogEntries   []modLogEntry
 	addedWords      []addedWord
 	removedWords    []int
@@ -154,6 +156,18 @@ func (f *fakeStore) GetExcludedChannelsByGuildId(string) ([]string, error) {
 
 func (f *fakeStore) AddModerationLogEntry(guildID string, action model.ModerationLogAction, userID, username, trigger, reason string) error {
 	f.modLogEntries = append(f.modLogEntries, modLogEntry{guildID, action, userID, username, trigger, reason})
+	return nil
+}
+
+func (f *fakeStore) GetGuildLanguage(string) (string, error) {
+	if f.guildLang == "" {
+		return "en", nil
+	}
+	return f.guildLang, nil
+}
+
+func (f *fakeStore) SetGuildLanguage(_, language string) error {
+	f.savedLangs = append(f.savedLangs, language)
 	return nil
 }
 

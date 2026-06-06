@@ -49,6 +49,9 @@ func (d *Database) Migrate() error {
 	if err := d.MigrateModerationRole(); err != nil {
 		return err
 	}
+	if err := d.MigrateGuildSettings(); err != nil {
+		return err
+	}
 	if err := d.MigrateModerationLogs(); err != nil {
 		return err
 	}

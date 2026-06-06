@@ -9,9 +9,27 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/internal/database"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 	"github.com/dragonis41/discord-bot-moderation/pkg/logger"
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
+
+// descLocsMap builds the per-locale translations of a command/option description
+// from the i18n catalog. Discord shows the localized description to users whose
+// client language matches; everyone else sees the default (English) Description.
+func descLocsMap(key string) map[discordgo.Locale]string {
+	return map[discordgo.Locale]string{
+		discordgo.French:    i18n.T(i18n.FR, key),
+		discordgo.SpanishES: i18n.T(i18n.ES, key),
+	}
+}
+
+// descLocs is descLocsMap as the pointer type that ApplicationCommand expects
+// (ApplicationCommandOption uses the non-pointer map directly).
+func descLocs(key string) *map[discordgo.Locale]string {
+	m := descLocsMap(key)
+	return &m
+}
 
 // store is everything the api package needs from the database. It is composed
 // from the interfaces the database package already exposes, so *database.Database
@@ -23,6 +41,7 @@ type store interface {
 	database.ModerationChannelsInterface
 	database.ExcludedChannelsInterface
 	database.ModerationRolesInterface
+	database.GuildSettingsInterface
 	database.LogsConfigInterface
 	database.ModerationLogsInterface
 	database.SystemLogsInterface
@@ -99,6 +118,7 @@ func (d *Discord) RunDiscordBot() {
 	d.client.AddHandler(d.handleAutomoderationSettings)       // Handler for automoderation settings selection
 	d.client.AddHandler(d.handleRemoveBannedWordSelection)    // Handler for the banned-word removal dropdown
 	d.client.AddHandler(d.handleRemoveBannedWebsiteSelection) // Handler for the banned-website removal dropdown
+	d.client.AddHandler(d.handleLanguageSelection)            // Handler for the server language selection
 	d.client.AddHandler(d.messageCreateHandler)               // Handler for message creation events
 	d.client.AddHandler(d.messageUpdateHandler)               // Handler for message update events
 	d.client.AddHandler(d.handleReportActions)                // Handler for report action buttons (kick/ban)
@@ -151,118 +171,146 @@ func (d *Discord) registerSlashCommands() {
 	var maxValue float64 = 100
 	commands := []*discordgo.ApplicationCommand{
 		{
-			Name:        "report",
-			Description: "Signal un utilisateur à la modération",
+			Name:                     "report",
+			Description:              i18n.T(i18n.EN, "cmd.report.desc"),
+			DescriptionLocalizations: descLocs("cmd.report.desc"),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionUser,
-					Name:        "user",
-					Description: "L'utilisateur à signaler",
-					Required:    true,
+					Type:                     discordgo.ApplicationCommandOptionUser,
+					Name:                     "user",
+					Description:              i18n.T(i18n.EN, "cmd.report.opt.user"),
+					DescriptionLocalizations: descLocsMap("cmd.report.opt.user"),
+					Required:                 true,
 				},
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "reason",
-					Description: "La raison du signalement",
-					Required:    false,
+					Type:                     discordgo.ApplicationCommandOptionString,
+					Name:                     "reason",
+					Description:              i18n.T(i18n.EN, "cmd.report.opt.reason"),
+					DescriptionLocalizations: descLocsMap("cmd.report.opt.reason"),
+					Required:                 false,
 				},
 			},
 		},
 		{
-			Name:        "status",
-			Description: "Affiche le statut du bot",
+			Name:                     "status",
+			Description:              i18n.T(i18n.EN, "cmd.status.desc"),
+			DescriptionLocalizations: descLocs("cmd.status.desc"),
 		},
 		{
-			Name:        "get-message-history",
-			Description: "Affiche l'historique des messages en cache de la guild",
+			Name:                     "get-message-history",
+			Description:              i18n.T(i18n.EN, "cmd.get-message-history.desc"),
+			DescriptionLocalizations: descLocs("cmd.get-message-history.desc"),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionInteger,
-					Name:        "limit",
-					Description: "Le nombre de messages à récupérer (par défaut 10, maximum 100)",
-					MinValue:    &minValue,
-					MaxValue:    maxValue,
-					Required:    false,
+					Type:                     discordgo.ApplicationCommandOptionInteger,
+					Name:                     "limit",
+					Description:              i18n.T(i18n.EN, "cmd.get-message-history.opt.limit"),
+					DescriptionLocalizations: descLocsMap("cmd.get-message-history.opt.limit"),
+					MinValue:                 &minValue,
+					MaxValue:                 maxValue,
+					Required:                 false,
 				},
 			},
 		},
 		{
-			Name:        "get-bot-logs",
-			Description: "Affiche les derniers logs du bot",
+			Name:                     "get-bot-logs",
+			Description:              i18n.T(i18n.EN, "cmd.get-bot-logs.desc"),
+			DescriptionLocalizations: descLocs("cmd.get-bot-logs.desc"),
 		},
 		{
-			Name:        "get-moderation-logs",
-			Description: "Affiche les derniers logs de modération",
+			Name:                     "get-moderation-logs",
+			Description:              i18n.T(i18n.EN, "cmd.get-moderation-logs.desc"),
+			DescriptionLocalizations: descLocs("cmd.get-moderation-logs.desc"),
 		},
 		{
-			Name:        "set-log-channels",
-			Description: "Sélectionne les canaux où les rapports de modération seront envoyés",
+			Name:                     "set-log-channels",
+			Description:              i18n.T(i18n.EN, "cmd.set-log-channels.desc"),
+			DescriptionLocalizations: descLocs("cmd.set-log-channels.desc"),
 		},
 		{
-			Name:        "set-moderation-channels",
-			Description: "Sélectionne les canaux où les signalements seront envoyés",
+			Name:                     "set-moderation-channels",
+			Description:              i18n.T(i18n.EN, "cmd.set-moderation-channels.desc"),
+			DescriptionLocalizations: descLocs("cmd.set-moderation-channels.desc"),
 		},
 		{
-			Name:        "set-excluded-channels",
-			Description: "Sélectionne les canaux exclus de l'automodération",
+			Name:                     "set-excluded-channels",
+			Description:              i18n.T(i18n.EN, "cmd.set-excluded-channels.desc"),
+			DescriptionLocalizations: descLocs("cmd.set-excluded-channels.desc"),
 		},
 		{
-			Name:        "set-moderation-roles",
-			Description: "Sélectionne les roles qui auront les permissions de modération",
+			Name:                     "set-moderation-roles",
+			Description:              i18n.T(i18n.EN, "cmd.set-moderation-roles.desc"),
+			DescriptionLocalizations: descLocs("cmd.set-moderation-roles.desc"),
 		},
 		{
-			Name:        "add-banned-word",
-			Description: "Ajoute un mot ou une expression à la liste des mots interdits",
+			Name:                     "add-banned-word",
+			Description:              i18n.T(i18n.EN, "cmd.add-banned-word.desc"),
+			DescriptionLocalizations: descLocs("cmd.add-banned-word.desc"),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "word",
-					Description: "Le mot ou la regex à interdire",
-					Required:    true,
+					Type:                     discordgo.ApplicationCommandOptionString,
+					Name:                     "word",
+					Description:              i18n.T(i18n.EN, "cmd.add-banned-word.opt.word"),
+					DescriptionLocalizations: descLocsMap("cmd.add-banned-word.opt.word"),
+					Required:                 true,
 				},
 				{
-					Type:        discordgo.ApplicationCommandOptionBoolean,
-					Name:        "is_regex",
-					Description: "Si le mot est une regex",
-					Required:    false,
+					Type:                     discordgo.ApplicationCommandOptionBoolean,
+					Name:                     "is_regex",
+					Description:              i18n.T(i18n.EN, "cmd.add-banned-word.opt.is_regex"),
+					DescriptionLocalizations: descLocsMap("cmd.add-banned-word.opt.is_regex"),
+					Required:                 false,
 				},
 			},
 		},
 		{
-			Name:        "get-banned-words",
-			Description: "Affiche la liste des mots interdits",
+			Name:                     "get-banned-words",
+			Description:              i18n.T(i18n.EN, "cmd.get-banned-words.desc"),
+			DescriptionLocalizations: descLocs("cmd.get-banned-words.desc"),
 		},
 		{
-			Name:        "remove-banned-word",
-			Description: "Supprime un ou plusieurs mots de la liste des mots interdits",
+			Name:                     "remove-banned-word",
+			Description:              i18n.T(i18n.EN, "cmd.remove-banned-word.desc"),
+			DescriptionLocalizations: descLocs("cmd.remove-banned-word.desc"),
 		},
 		{
-			Name:        "add-banned-website",
-			Description: "Ajoute un site web à la liste des sites interdits",
+			Name:                     "add-banned-website",
+			Description:              i18n.T(i18n.EN, "cmd.add-banned-website.desc"),
+			DescriptionLocalizations: descLocs("cmd.add-banned-website.desc"),
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "url",
-					Description: "L'URL du site à interdire (ex: example.com)",
-					Required:    true,
+					Type:                     discordgo.ApplicationCommandOptionString,
+					Name:                     "url",
+					Description:              i18n.T(i18n.EN, "cmd.add-banned-website.opt.url"),
+					DescriptionLocalizations: descLocsMap("cmd.add-banned-website.opt.url"),
+					Required:                 true,
 				},
 			},
 		},
 		{
-			Name:        "get-banned-websites",
-			Description: "Affiche la liste des sites web interdits",
+			Name:                     "get-banned-websites",
+			Description:              i18n.T(i18n.EN, "cmd.get-banned-websites.desc"),
+			DescriptionLocalizations: descLocs("cmd.get-banned-websites.desc"),
 		},
 		{
-			Name:        "remove-banned-website",
-			Description: "Supprime un ou plusieurs sites web de la liste des sites interdits",
+			Name:                     "remove-banned-website",
+			Description:              i18n.T(i18n.EN, "cmd.remove-banned-website.desc"),
+			DescriptionLocalizations: descLocs("cmd.remove-banned-website.desc"),
 		},
 		{
-			Name:        "configure-automod",
-			Description: "Active ou désactive les fonctionnalités d'automodération",
+			Name:                     "configure-automod",
+			Description:              i18n.T(i18n.EN, "cmd.configure-automod.desc"),
+			DescriptionLocalizations: descLocs("cmd.configure-automod.desc"),
 		},
 		{
-			Name:        "help",
-			Description: "Liste toutes les commandes disponibles",
+			Name:                     "help",
+			Description:              i18n.T(i18n.EN, "cmd.help.desc"),
+			DescriptionLocalizations: descLocs("cmd.help.desc"),
+		},
+		{
+			Name:                     "lang",
+			Description:              i18n.T(i18n.EN, "cmd.lang.desc"),
+			DescriptionLocalizations: descLocs("cmd.lang.desc"),
 		},
 	}
 
@@ -318,6 +366,8 @@ func (d *Discord) slashCommandHandler(s *discordgo.Session, i *discordgo.Interac
 		d.configureAutomod(s, i)
 	case "help":
 		d.showHelp(s, i)
+	case "lang":
+		d.selectLanguage(s, i)
 	}
 }
 

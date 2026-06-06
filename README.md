@@ -17,5 +17,6 @@ A Discord bot to auto moderate a server because nobody want spams
 3. You also need to use the `/set-moderation-channels` command to specify which channels the bot should monitor for moderation.
 4. And the `/set-moderation-roles` command to specify which role has permission to manage the bot settings and be notified of moderation actions.
 5. Then, set up your server to give access to all channels for the bot and give the bot the necessary permissions. (manage messages, kick, ban)
+6. Optionally, use the `/lang` command to set the bot's language for your server. English, French and Spanish are supported (English is the default).
 
 // TODO : Replace this with `/setup` command that does all the setup in one go.

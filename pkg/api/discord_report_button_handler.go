@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
 )
 
 // buildReportActionButtons creates the action buttons for report messages
@@ -63,6 +64,8 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		return
 	}
 
+	lang := d.lang(i.GuildID)
+
 	// Check if user has moderation permissions
 	if !d.db.CheckModerationPermissionOnInteraction(s, i) {
 		return
@@ -86,7 +89,7 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	ReportedUser, err := s.User(userID)
 	if err != nil {
 		d.logError(i.GuildID, "handleReportActions()", "Error fetching user: %s", err)
-		d.followup(s, i, "handleReportActions()", errorEmbed("Erreur", "Impossible de récupérer les informations de l'utilisateur."))
+		d.followup(s, i, "handleReportActions()", errorEmbed(lang, i18n.T(lang, "report_action.error_title"), i18n.T(lang, "report_action.fetch_user_error")))
 		return
 	}
 
@@ -99,40 +102,40 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 
 	switch action {
 	case "kick":
-		reason := fmt.Sprintf("Expulsé le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("👢 **Expulsion**\n\nVous avez été expulsé du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Expulsé suite à un signalement`", guildName, time.Now().Unix()))
+		reason := i18n.T(lang, "report_action.audit_kick", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, i18n.T(lang, "report_action.kick_dm", guildName, time.Now().Unix()))
 		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, reason)
-		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été expulsé du serveur.", ReportedUser.Username)
+		successMessage = i18n.T(lang, "report_action.kicked", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", i.Member.User.Username, ReportedUser.Username)
 	case "ban":
-		reason := fmt.Sprintf("Banni le %s suite à un signalement", time.Now().UTC().Format("02/01/2006 à 15:04 UTC"))
-		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, fmt.Sprintf("🔨 **Banissement**\n\nVous avez été banni du serveur [%s] le <t:%d:f> pour la raison suivante : \n`Banni suite à un signalement`", guildName, time.Now().Unix()))
+		reason := i18n.T(lang, "report_action.audit_ban", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
+		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, i18n.T(lang, "report_action.ban_dm", guildName, time.Now().Unix()))
 		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, reason, 1)
-		successMessage = fmt.Sprintf("✅ L'utilisateur **%s** a été banni du serveur.", ReportedUser.Username)
+		successMessage = i18n.T(lang, "report_action.banned", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", i.Member.User.Username, ReportedUser.Username)
 	default:
-		successMessage = fmt.Sprintf("✅ Le signalement de l'utilisateur **%s** a été ignoré.", ReportedUser.Username)
+		successMessage = i18n.T(lang, "report_action.ignored", ReportedUser.Username)
 		logMessage = fmt.Sprintf("User [%s] ignored report for user [%s]", i.Member.User.Username, ReportedUser.Username)
 	}
 
 	if actionErr != nil {
 		d.logError(i.GuildID, "handleReportActions()", "Error performing %s: %s", action, actionErr)
-		d.followup(s, i, "handleReportActions()", errorEmbed("Erreur", "Impossible d'effectuer l'action. Vérifiez que le bot a les permissions nécessaires et que l'utilisateur est toujours sur le serveur."))
+		d.followup(s, i, "handleReportActions()", errorEmbed(lang, i18n.T(lang, "report_action.error_title"), i18n.T(lang, "report_action.action_error")))
 		return
 	}
 
 	d.logSuccess(i.GuildID, "handleReportActions()", "%s", logMessage)
 
 	// Send success message
-	d.followup(s, i, "handleReportActions()", successEmbed("Action effectuée", successMessage))
+	d.followup(s, i, "handleReportActions()", successEmbed(lang, i18n.T(lang, "report_action.done_title"), successMessage))
 
 	// Update the original report message to show the action was taken
 	updatedEmbed := i.Message.Embeds[0]
 	// Use Discord's timestamp in embed description for local time display
 	if updatedEmbed.Description != "" {
-		updatedEmbed.Description += fmt.Sprintf("\n\nAction '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description += i18n.T(lang, "report_action.taken", action, i.Member.User.Username, time.Now().Unix())
 	} else {
-		updatedEmbed.Description = fmt.Sprintf("Action '%s' effectué par %s le <t:%d:f>", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description = strings.TrimPrefix(i18n.T(lang, "report_action.taken", action, i.Member.User.Username, time.Now().Unix()), "\n\n")
 	}
 	updatedEmbed.Footer = nil
 
