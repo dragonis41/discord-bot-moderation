@@ -14,7 +14,7 @@ import (
 
 func TestAddBannedWordCommand(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.addBannedWord(fake, modInteraction("add-banned-word", strOpt("word", "badword"), boolOpt("is_regex", true)))
@@ -32,7 +32,7 @@ func TestAddBannedWordCommand(t *testing.T) {
 
 func TestAddBannedWordCommandRejectsEmpty(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.addBannedWord(fake, modInteraction("add-banned-word", strOpt("word", "")))
@@ -47,7 +47,7 @@ func TestAddBannedWordCommandRejectsEmpty(t *testing.T) {
 
 func TestAddBannedWordCommandPermissionDenied(t *testing.T) {
 	fs := &fakeStore{denyPermission: true}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.addBannedWord(fake, modInteraction("add-banned-word", strOpt("word", "x")))
@@ -59,7 +59,7 @@ func TestAddBannedWordCommandPermissionDenied(t *testing.T) {
 
 func TestRemoveBannedWordCommandShowsMenu(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.removeBannedWord(fake, modInteraction("remove-banned-word"))
@@ -77,7 +77,7 @@ func TestRemoveBannedWordCommandShowsMenu(t *testing.T) {
 
 func TestRemoveBannedWordCommandEmpty(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.removeBannedWord(fake, modInteraction("remove-banned-word"))
@@ -95,7 +95,7 @@ func TestRemoveBannedWordCommandEmpty(t *testing.T) {
 
 func TestRemoveBannedWordSelectionDeletes(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(i18n.EN), "test")
@@ -110,7 +110,7 @@ func TestRemoveBannedWordSelectionDeletes(t *testing.T) {
 
 func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 7, WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	// A component belonging to a different selector must be left alone.
@@ -126,7 +126,7 @@ func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
 
 func TestListBannedWordsCommand(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{ID: 1, WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.listBannedWords(fake, modInteraction("get-banned-words"))
@@ -142,7 +142,7 @@ func TestListBannedWordsCommand(t *testing.T) {
 
 func TestListBannedWordsCommandEmpty(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.listBannedWords(fake, modInteraction("get-banned-words"))
@@ -159,7 +159,7 @@ func TestListBannedWordsCommandEmpty(t *testing.T) {
 
 func TestAddBannedWebsiteCommand(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.addBannedWebsite(fake, modInteraction("add-banned-website", strOpt("url", "evil.com")))
@@ -171,7 +171,7 @@ func TestAddBannedWebsiteCommand(t *testing.T) {
 
 func TestRemoveBannedWebsiteCommandShowsMenu(t *testing.T) {
 	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{ID: 3, WebsiteURL: "evil.com"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.removeBannedWebsite(fake, modInteraction("remove-banned-website"))
@@ -186,7 +186,7 @@ func TestRemoveBannedWebsiteCommandShowsMenu(t *testing.T) {
 
 func TestRemoveBannedWebsiteSelectionDeletes(t *testing.T) {
 	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{ID: 3, WebsiteURL: "evil.com"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.handleRemoveSelection(fake, componentInteraction("rmsite_select_0", "3"), d.bannedWebsiteRemoveSelector(i18n.EN), "test")
@@ -201,7 +201,7 @@ func TestRemoveBannedWebsiteSelectionDeletes(t *testing.T) {
 
 func TestListBannedWebsitesCommand(t *testing.T) {
 	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{ID: 1, WebsiteURL: "evil.com"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.listBannedWebsites(fake, modInteraction("get-banned-websites"))
@@ -216,7 +216,7 @@ func TestListBannedWebsitesCommand(t *testing.T) {
 
 func TestConfigureAutomodCommand(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.configureAutomod(fake, modInteraction("configure-automod"))
@@ -236,10 +236,10 @@ func TestConfigureAutomodCommand(t *testing.T) {
 func TestGetBotLogsCommand(t *testing.T) {
 	fs := &fakeStore{
 		sysLogCount:   5,
-		sysLogMax:     100,
+		sysLogMax:     1000,
 		sysLogEntries: []database.SystemLogEntry{{Function: "fn", Content: "an event", CreatedAt: "2024-01-01 00:00:00"}},
 	}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.getBotLogs(fake, modInteraction("get-bot-logs"))
@@ -255,10 +255,10 @@ func TestGetBotLogsCommand(t *testing.T) {
 func TestGetModerationLogsCommand(t *testing.T) {
 	fs := &fakeStore{
 		modLogCount: 2,
-		modLogMax:   100,
+		modLogMax:   1000,
 		modLogList:  []database.ModerationLogEntry{{Action: "BAN", UserID: "u1", Username: "bad", Reason: "spam", CreatedAt: "2024-01-01 00:00:00"}},
 	}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.getModerationLogs(fake, modInteraction("get-moderation-logs"))
@@ -272,7 +272,7 @@ func TestGetModerationLogsCommand(t *testing.T) {
 
 func TestSelectLogChannelsCommand(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{
 		guildChannels: []*discordgo.Channel{
 			{ID: "c1", Name: "general", Type: discordgo.ChannelTypeGuildText},
@@ -292,7 +292,7 @@ func TestSelectLogChannelsCommand(t *testing.T) {
 
 func TestSelectModeratorRolesCommand(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{
 		guildRoles: []*discordgo.Role{{ID: "r1", Name: "Mods", Position: 1}},
 	}
@@ -315,7 +315,7 @@ func TestSelectModeratorAndExcludedChannelsCommands(t *testing.T) {
 		{"excluded", (*Discord).selectExcludedChannels},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			d := newTestDiscordWith(&fakeStore{}, NewCache(100, 3, time.Hour))
+			d := newTestDiscordWith(&fakeStore{}, NewCache(1000, 3, time.Hour))
 			fake := &fakeSender{guildChannels: channels}
 
 			tc.call(d, fake, modInteraction("set-channels"))

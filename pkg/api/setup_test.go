@@ -304,7 +304,7 @@ func (f *fakeSender) ChannelMessageEditComplex(m *discordgo.MessageEdit, _ ...di
 // --- helpers ---
 
 func newTestDiscord() *Discord {
-	return newTestDiscordWith(&fakeStore{}, NewCache(100, 3, time.Hour))
+	return newTestDiscordWith(&fakeStore{}, NewCache(1000, 3, time.Hour))
 }
 
 func newTestDiscordWith(db store, cache *Cache) *Discord {

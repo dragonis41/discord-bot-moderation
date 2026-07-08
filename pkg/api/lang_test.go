@@ -10,7 +10,7 @@ import (
 
 func TestSelectLanguageShowsMenu(t *testing.T) {
 	fs := &fakeStore{guildLang: "fr"}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.selectLanguage(fake, modInteraction("lang"))
@@ -29,7 +29,7 @@ func TestSelectLanguageShowsMenu(t *testing.T) {
 
 func TestHandleLanguageSelectionPersistsAndConfirms(t *testing.T) {
 	fs := &fakeStore{guildLang: "en"}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.applyLanguageSelection(fake, componentInteraction(langSelectCustomID, "es"))
@@ -44,7 +44,7 @@ func TestHandleLanguageSelectionPersistsAndConfirms(t *testing.T) {
 
 func TestHandleLanguageSelectionIgnoresOtherComponents(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.applyLanguageSelection(fake, componentInteraction("not_lang", "es"))

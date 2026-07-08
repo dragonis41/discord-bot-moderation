@@ -145,7 +145,7 @@ func TestBuildReportActionButtons(t *testing.T) {
 
 func TestLogHelpersPersistToStore(t *testing.T) {
 	fs := &fakeStore{}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 
 	d.logError("g1", "fn", "an error %d", 1)
 	d.logInfo("g1", "fn", "info")

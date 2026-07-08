@@ -168,7 +168,7 @@ func (d *Discord) RunDiscordBot() {
 
 func (d *Discord) registerSlashCommands() {
 	var minValue float64 = 1
-	var maxValue float64 = 100
+	var maxValue float64 = 1000
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:                     "report",

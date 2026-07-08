@@ -13,7 +13,7 @@ import (
 
 func TestCheckBannedWordsDeletesBelowThreshold(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour)) // threshold 3
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour)) // threshold 3
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -41,7 +41,7 @@ func TestCheckBannedWordsDeletesBelowThreshold(t *testing.T) {
 
 func TestCheckBannedWordsBansAtThreshold(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 1, time.Hour)) // threshold 1
+	d := newTestDiscordWith(fs, NewCache(1000, 1, time.Hour)) // threshold 1
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -64,7 +64,7 @@ func TestCheckBannedWordsDisabled(t *testing.T) {
 		settings:    &database.AutomoderationSettings{BannedWordsEnabled: false},
 		bannedWords: []database.BannedWord{{WordPattern: "spam"}},
 	}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -80,7 +80,7 @@ func TestCheckBannedWordsDisabled(t *testing.T) {
 
 func TestCheckBannedWordsNoMatch(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -98,7 +98,7 @@ func TestCheckBannedWordsNoMatch(t *testing.T) {
 
 func TestCheckBannedWebsitesDeletes(t *testing.T) {
 	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{WebsiteURL: "evil.com"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -114,7 +114,7 @@ func TestCheckBannedWebsitesDeletes(t *testing.T) {
 
 func TestCheckBannedWebsitesNoURLInMessage(t *testing.T) {
 	fs := &fakeStore{bannedWebsites: []database.BannedWebsite{{WebsiteURL: "evil.com"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -132,7 +132,7 @@ func TestCheckBannedWebsitesNoURLInMessage(t *testing.T) {
 
 func TestCheckMessageSpamBansCrossChannelDuplicates(t *testing.T) {
 	fs := &fakeStore{}
-	c := NewCache(100, 2, time.Hour) // threshold 2
+	c := NewCache(1000, 2, time.Hour) // threshold 2
 	d := newTestDiscordWith(fs, c)
 	fake := &fakeSender{}
 
@@ -156,7 +156,7 @@ func TestCheckMessageSpamBansCrossChannelDuplicates(t *testing.T) {
 
 func TestCheckMessageSpamIgnoresSingleChannel(t *testing.T) {
 	fs := &fakeStore{}
-	c := NewCache(100, 2, time.Hour)
+	c := NewCache(1000, 2, time.Hour)
 	d := newTestDiscordWith(fs, c)
 	fake := &fakeSender{}
 
@@ -184,7 +184,7 @@ func TestModerateMessageSkipsModerators(t *testing.T) {
 		isModerator: true,
 		bannedWords: []database.BannedWord{{WordPattern: "spam"}},
 	}
-	d := newTestDiscordWith(fs, NewCache(100, 1, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 1, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -203,7 +203,7 @@ func TestModerateMessageSkipsExcludedChannel(t *testing.T) {
 		excluded:    map[string]bool{"c1": true},
 		bannedWords: []database.BannedWord{{WordPattern: "spam"}},
 	}
-	d := newTestDiscordWith(fs, NewCache(100, 1, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 1, time.Hour))
 	fake := &fakeSender{}
 
 	m := testMessage()
@@ -220,7 +220,7 @@ func TestModerateMessageSkipsExcludedChannel(t *testing.T) {
 
 func TestModerateMessageActsOnViolation(t *testing.T) {
 	fs := &fakeStore{bannedWords: []database.BannedWord{{WordPattern: "spam"}}}
-	d := newTestDiscordWith(fs, NewCache(100, 1, time.Hour)) // threshold 1 -> ban
+	d := newTestDiscordWith(fs, NewCache(1000, 1, time.Hour)) // threshold 1 -> ban
 	fake := &fakeSender{}
 
 	m := testMessage()

@@ -115,7 +115,7 @@ func TestSendDM(t *testing.T) {
 
 func TestSendLogChannelsEmbed(t *testing.T) {
 	fs := &fakeStore{logChannels: []string{"log1", "log2"}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.sendLogChannelsEmbed(fake, "g1", &discordgo.MessageEmbed{Title: "hi"})
@@ -130,7 +130,7 @@ func TestSendLogChannelsEmbed(t *testing.T) {
 
 func TestSendModChannelsEmbed(t *testing.T) {
 	fs := &fakeStore{modChannels: []string{"m1", "m2"}}
-	d := newTestDiscordWith(fs, NewCache(100, 3, time.Hour))
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
 	fake := &fakeSender{}
 
 	d.sendModChannelsEmbed(fake, "g1", &discordgo.MessageEmbed{Title: "x"})

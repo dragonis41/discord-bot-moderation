@@ -10,8 +10,8 @@ func TestLogsConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMaxModerationLogEntries: %v", err)
 	}
-	if modMax != 100 {
-		t.Errorf("default moderation max = %d, want 100", modMax)
+	if modMax != 1000 {
+		t.Errorf("default moderation max = %d, want 1000", modMax)
 	}
 
 	sysMax, err := d.GetMaxSystemLogEntries("g1")

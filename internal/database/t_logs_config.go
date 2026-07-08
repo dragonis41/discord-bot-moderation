@@ -21,7 +21,7 @@ func (d *Database) MigrateLogsConfigs() error {
 	createConfigTableQuery := `
 	CREATE TABLE IF NOT EXISTS logs_config (
 		guild_id TEXT PRIMARY KEY,
-		max_moderation_log_entries INTEGER DEFAULT 100,
+		max_moderation_log_entries INTEGER DEFAULT 1000,
 		max_system_log_entries INTEGER DEFAULT 10000
 	);
 	`
@@ -46,7 +46,7 @@ func (d *Database) GetMaxModerationLogEntries(guildID string) (int, error) {
 	if err != nil {
 		// If no config exists, return default
 		if errors.Is(err, sql.ErrNoRows) {
-			return 100, nil
+			return 1000, nil
 		}
 		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
 	}

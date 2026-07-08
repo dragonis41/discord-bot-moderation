@@ -21,7 +21,7 @@ func msg(guildID, channelID, msgID, authorID, content string) *discordgo.Message
 }
 
 func TestCacheAddAndGetUserRecentMessages(t *testing.T) {
-	c := NewCache(100, 3, time.Hour)
+	c := NewCache(1000, 3, time.Hour)
 
 	c.AddMessage(msg("g1", "c1", "m1", "u1", "hello"))
 	c.AddMessage(msg("g1", "c1", "m2", "u2", "other user"))
@@ -65,7 +65,7 @@ func TestCacheEvictsBeyondMaxSize(t *testing.T) {
 }
 
 func TestCacheUpdateMessage(t *testing.T) {
-	c := NewCache(100, 3, time.Hour)
+	c := NewCache(1000, 3, time.Hour)
 	c.AddMessage(msg("g1", "c1", "m1", "u1", "before"))
 
 	c.UpdateMessage(&discordgo.MessageUpdate{
@@ -93,7 +93,7 @@ func TestCacheUpdateMessage(t *testing.T) {
 }
 
 func TestCacheViolationIncrements(t *testing.T) {
-	c := NewCache(100, 3, time.Hour)
+	c := NewCache(1000, 3, time.Hour)
 
 	if n := c.IncrementViolation("g1", "u1"); n != 1 {
 		t.Errorf("first violation = %d, want 1", n)
@@ -120,7 +120,7 @@ func TestCacheViolationWindowExpiry(t *testing.T) {
 	// A window in the past forces every violation to be treated as fresh and any
 	// existing count to read as expired — exercising the window-reset branches
 	// deterministically without sleeping.
-	c := NewCache(100, 3, -time.Second)
+	c := NewCache(1000, 3, -time.Second)
 
 	if n := c.IncrementViolation("g1", "u1"); n != 1 {
 		t.Errorf("first = %d, want 1", n)
@@ -175,7 +175,7 @@ func TestStickerAndAttachmentHelpers(t *testing.T) {
 }
 
 func TestCachePendingBan(t *testing.T) {
-	c := NewCache(100, 3, time.Hour)
+	c := NewCache(1000, 3, time.Hour)
 
 	if c.IsUserPendingBan("g1", "u1") {
 		t.Error("user should not be pending before marking")

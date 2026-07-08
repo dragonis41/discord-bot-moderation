@@ -80,7 +80,7 @@ func TestModerationLogsRetentionCleanup(t *testing.T) {
 func TestSetMaxModerationLogEntriesTrimsImmediately(t *testing.T) {
 	d := newTestDB(t)
 
-	if err := d.SetMaxModerationLogEntries("g1", 100); err != nil {
+	if err := d.SetMaxModerationLogEntries("g1", 1000); err != nil {
 		t.Fatalf("SetMaxModerationLogEntries: %v", err)
 	}
 	for range 5 {

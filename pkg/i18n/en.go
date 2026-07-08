@@ -218,7 +218,7 @@ var en = map[string]string{
 	"cmd.report.opt.reason":             "The reason for the report",
 	"cmd.status.desc":                   "Show the bot status",
 	"cmd.get-message-history.desc":      "Show the guild's cached message history",
-	"cmd.get-message-history.opt.limit": "Number of messages to fetch (default 10, max 100)",
+	"cmd.get-message-history.opt.limit": "Number of messages to fetch (default 10, max 1000)",
 	"cmd.get-bot-logs.desc":             "Show the latest bot logs",
 	"cmd.get-moderation-logs.desc":      "Show the latest moderation logs",
 	"cmd.set-log-channels.desc":         "Select the channels where moderation reports will be sent",

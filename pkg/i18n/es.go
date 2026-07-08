@@ -217,7 +217,7 @@ var es = map[string]string{
 	"cmd.report.opt.reason":             "El motivo del reporte",
 	"cmd.status.desc":                   "Muestra el estado del bot",
 	"cmd.get-message-history.desc":      "Muestra el historial de mensajes en caché del servidor",
-	"cmd.get-message-history.opt.limit": "Número de mensajes a obtener (por defecto 10, máximo 100)",
+	"cmd.get-message-history.opt.limit": "Número de mensajes a obtener (por defecto 10, máximo 1000)",
 	"cmd.get-bot-logs.desc":             "Muestra los últimos registros del bot",
 	"cmd.get-moderation-logs.desc":      "Muestra los últimos registros de moderación",
 	"cmd.set-log-channels.desc":         "Selecciona los canales donde se enviarán los reportes de moderación",

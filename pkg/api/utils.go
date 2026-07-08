@@ -49,7 +49,7 @@ func (d *Discord) setMaxLogRetention() {
 			d.logWarning(guild.ID, "setMaxLogRetention()", "Failed to check if max moderation log entries is set for guild %s: %v", guild.ID, err)
 		}
 		if !moderationLogIsSet {
-			if err := d.db.SetMaxModerationLogEntries(guild.ID, 100); err != nil {
+			if err := d.db.SetMaxModerationLogEntries(guild.ID, 1000); err != nil {
 				d.logWarning(guild.ID, "setMaxLogRetention()", "Failed to set default max moderation log entries for guild %s: %v", guild.ID, err)
 			}
 		}
