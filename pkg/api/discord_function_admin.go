@@ -134,7 +134,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 			limit = int(option.IntValue())
 		}
 	}
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 1000 {
 		d.followup(s, i, "getMessageHistory()", errorEmbed(lang, i18n.T(lang, "history.title"), i18n.T(lang, "history.limit_error")))
 		return
 	}

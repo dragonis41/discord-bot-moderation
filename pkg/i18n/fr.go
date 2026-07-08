@@ -105,7 +105,7 @@ var fr = map[string]string{
 
 	// /get-message-history --------------------------------------------------
 	"history.title":       "Message History",
-	"history.limit_error": "La limite doit être comprise entre 1 et 100.",
+	"history.limit_error": "La limite doit être comprise entre 1 et 1000.",
 	"history.empty":       "Aucun message en cache pour ce serveur.",
 	"history.header":      "Derniers %d messages en cache :\n\n",
 

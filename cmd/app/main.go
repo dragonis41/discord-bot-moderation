@@ -41,7 +41,7 @@ func main() {
 		return
 	}
 
-	client := api.NewClient(l, db, discord, api.NewCache(100, 3, 5*time.Minute))
+	client := api.NewClient(l, db, discord, api.NewCache(1000, 3, 1*time.Minute))
 	client.RunDiscordBot()
 
 	if err := db.CloseDatabase(); err != nil {
