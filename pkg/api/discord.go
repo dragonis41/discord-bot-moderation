@@ -122,6 +122,7 @@ func (d *Discord) RunDiscordBot() {
 	d.client.AddHandler(d.messageCreateHandler)               // Handler for message creation events
 	d.client.AddHandler(d.messageUpdateHandler)               // Handler for message update events
 	d.client.AddHandler(d.handleReportActions)                // Handler for report action buttons (kick/ban)
+	d.client.AddHandler(d.guildCreateHandler)                 // Handler to register commands when bot joins a new guild
 
 	// open session
 	err := d.client.Open()
@@ -166,10 +167,36 @@ func (d *Discord) RunDiscordBot() {
 	d.removeSlashCommands()
 }
 
+func (d *Discord) guildCreateHandler(s *discordgo.Session, g *discordgo.GuildCreate) {
+	if g == nil || g.Guild == nil {
+		return
+	}
+
+	d.registerSlashCommandsForGuild(g.ID)
+}
+
 func (d *Discord) registerSlashCommands() {
+	// Register commands for each guild the bot is connected to.
+	for _, guild := range d.client.State.Guilds {
+		d.registerSlashCommandsForGuild(guild.ID)
+	}
+}
+
+func (d *Discord) registerSlashCommandsForGuild(guildID string) {
+	commands := d.buildSlashCommands()
+	_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guildID, commands)
+	if err != nil {
+		d.logError(guildID, "registerSlashCommandsForGuild()", "Cannot register commands for guild %s: %v", guildID, err)
+		return
+	}
+
+	d.logSuccess(guildID, "registerSlashCommandsForGuild()", "Registered all slash commands for guild %s", guildID)
+}
+
+func (d *Discord) buildSlashCommands() []*discordgo.ApplicationCommand {
 	var minValue float64 = 1
 	var maxValue float64 = 1000
-	commands := []*discordgo.ApplicationCommand{
+	return []*discordgo.ApplicationCommand{
 		{
 			Name:                     "report",
 			Description:              i18n.T(i18n.EN, "cmd.report.desc"),
@@ -312,16 +339,6 @@ func (d *Discord) registerSlashCommands() {
 			Description:              i18n.T(i18n.EN, "cmd.lang.desc"),
 			DescriptionLocalizations: descLocs("cmd.lang.desc"),
 		},
-	}
-
-	// Register commands for each guild the bot is connected to
-	for _, guild := range d.client.State.Guilds {
-		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, commands)
-		if err != nil {
-			d.logError(guild.ID, "registerSlashCommands()", "Cannot register commands for guild %s: %v", guild.ID, err)
-		} else {
-			d.logSuccess(guild.ID, "registerSlashCommands()", "Registered all slash commands for guild %s", guild.ID)
-		}
 	}
 }
 
