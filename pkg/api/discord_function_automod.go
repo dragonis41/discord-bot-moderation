@@ -13,25 +13,34 @@ import (
 	"github.com/dragonis41/discord-bot-moderation/pkg/utils"
 )
 
+// shouldIgnoreMessage returns true if the message should be ignored by the moderation handlers.
+//
+//	It checks for nil pointers, bot/self messages, webhooks, and DMs.
+func shouldIgnoreMessage(s *discordgo.Session, m *discordgo.Message) bool {
+	if s == nil || s.State == nil || m == nil || m.Author == nil || m.Member == nil {
+		return true
+	}
+	// Ignore messages from bots and itself
+	if m.Author.Bot || m.Author.ID == s.State.User.ID {
+		return true
+	}
+	// Ignore webhook messages
+	if m.WebhookID != "" {
+		return true
+	}
+	// Ignore if this is a private message (DM)
+	if m.GuildID == "" {
+		return true
+	}
+	return false
+}
+
 // messageCreateHandler handles new messages created in guilds
 //
 //	It ignores messages from bots and itself, as well as private messages (DMs).
 //	It adds the message to cache and calls the common moderation function.
 func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore if Author is nil
-	if m == nil || s == nil || m.Author == nil || m.Member == nil || s.State == nil {
-		return
-	}
-	// Ignore messages from bots and itself
-	if m.Author.Bot || m.Author.ID == s.State.User.ID {
-		return
-	}
-	// Ignore webhook messages
-	if m.WebhookID != "" {
-		return
-	}
-	// Ignore if this is a private message (DM)
-	if m.GuildID == "" {
+	if m == nil || m.Message == nil || shouldIgnoreMessage(s, m.Message) {
 		return
 	}
 	// Ignore system messages (thread starters, pins, join notifications, etc.)
@@ -50,21 +59,7 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 //	It ignores messages from bots and itself, as well as private messages (DMs).
 //	It updates the message in cache and calls the common moderation function.
 func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.MessageUpdate) {
-	// Ignore if Author is nil (can happen with some message update events)
-	// Also check if Message is nil - update events can have incomplete data
-	if m == nil || s == nil || m.Message == nil || m.Author == nil || m.Member == nil || s.State == nil {
-		return
-	}
-	// Ignore messages from bots and itself
-	if m.Author.Bot || m.Author.ID == s.State.User.ID {
-		return
-	}
-	// Ignore webhook messages (webhooks like news bots can trigger update events)
-	if m.WebhookID != "" {
-		return
-	}
-	// Ignore if this is a private message (DM)
-	if m.GuildID == "" {
+	if m == nil || m.Message == nil || shouldIgnoreMessage(s, m.Message) {
 		return
 	}
 	// Ignore update events that don't contain actual content (e.g., embed updates, reactions)
