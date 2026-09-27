@@ -151,35 +151,57 @@ func (c *Cache) AddMessage(m *discordgo.MessageCreate) {
 	c.messageCache[m.GuildID] = cache
 }
 
-// UpdateMessage updates a message in the guild's cache
-func (c *Cache) UpdateMessage(m *discordgo.MessageUpdate) {
+// UpdateMessage updates a message in the guild's cache. It reports whether the message was already tracked in our own
+// recent-activity cache (found) and whether its content or attachment count actually changed compared to what we had cached (changed).
+//
+//	Both are needed by the caller to tell a genuine edit from a "phantom" MESSAGE_UPDATE event: Discord also sends this
+//	event when it merely refreshes a link embed/attachment metadata (e.g. a delayed link preview crawl), resending the
+//	message's current content unmodified. This can happen at any time, even years after the message was posted,
+//	regardless of whether the message was genuinely edited before, so EditedTimestamp alone cannot be used to filter
+//	these out: per Discord's docs it only reflects the last real edit ("or null if never"), and it doesn't change on a
+//	phantom event either, so a long-ago-edited message would still slip past an `EditedTimestamp == nil` check.
+//	  - https://discord.com/developers/docs/events/gateway-events#message-update
+//	  - https://discord.com/developers/docs/resources/message#message-object
+//	A message outside our bounded cache window (never seen or long evicted) can't be verified this way, so it is
+//	reported as not found and treated as unverifiable by the caller
+func (c *Cache) UpdateMessage(m *discordgo.MessageUpdate) (found bool, changed bool) {
 	c.messageCacheMu.Lock()
 	defer c.messageCacheMu.Unlock()
 
 	indexMap, exists := c.messageCacheIndex[m.GuildID]
 	if !exists {
-		return
+		return false, false
 	}
 
-	index, found := indexMap[m.ID]
-	if !found {
-		return
+	index, ok := indexMap[m.ID]
+	if !ok {
+		return false, false
 	}
 
 	cache := c.messageCache[m.GuildID]
-	if index >= 0 && index < len(cache) {
-		// Update content and timestamp
-		cache[index].Content = m.Content
-		cache[index].Timestamp = time.Now()
-		// Update attachment info if available in the update event
-		if m.Attachments != nil {
-			cache[index].AttachmentCount = len(m.Attachments)
-		}
-		if m.Embeds != nil {
-			cache[index].HasEmbeds = len(m.Embeds) > 0
-		}
-		c.messageCache[m.GuildID] = cache
+	if index < 0 || index >= len(cache) {
+		return false, false
 	}
+
+	newAttachmentCount := cache[index].AttachmentCount
+	if m.Attachments != nil {
+		newAttachmentCount = len(m.Attachments)
+	}
+	changed = cache[index].Content != m.Content || cache[index].AttachmentCount != newAttachmentCount
+
+	// Update content and timestamp
+	cache[index].Content = m.Content
+	cache[index].Timestamp = time.Now()
+	// Update attachment info if available in the update event
+	if m.Attachments != nil {
+		cache[index].AttachmentCount = len(m.Attachments)
+	}
+	if m.Embeds != nil {
+		cache[index].HasEmbeds = len(m.Embeds) > 0
+	}
+	c.messageCache[m.GuildID] = cache
+
+	return true, changed
 }
 
 // IncrementViolation increments violation count and returns the new count

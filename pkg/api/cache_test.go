@@ -68,7 +68,7 @@ func TestCacheUpdateMessage(t *testing.T) {
 	c := NewCache(1000, 3, time.Hour)
 	c.AddMessage(msg("g1", "c1", "m1", "u1", "before"))
 
-	c.UpdateMessage(&discordgo.MessageUpdate{
+	found, changed := c.UpdateMessage(&discordgo.MessageUpdate{
 		Message: &discordgo.Message{
 			ID:        "m1",
 			GuildID:   "g1",
@@ -77,16 +77,40 @@ func TestCacheUpdateMessage(t *testing.T) {
 			Author:    &discordgo.User{ID: "u1"},
 		},
 	})
+	if !found || !changed {
+		t.Errorf("genuine edit: found=%v changed=%v, want true/true", found, changed)
+	}
 
 	got := c.GetUserRecentMessages("g1", "u1", 1)
 	if len(got) != 1 || got[0].Content != "after" {
 		t.Fatalf("update not applied: %+v", got)
 	}
 
-	// Updating an unknown message is a no-op (must not panic or insert).
-	c.UpdateMessage(&discordgo.MessageUpdate{
+	// A phantom update resending the same (already-cached) content - e.g.
+	// Discord refreshing a link embed - must be reported as found but
+	// unchanged, so callers can skip re-running moderation on it.
+	found, changed = c.UpdateMessage(&discordgo.MessageUpdate{
+		Message: &discordgo.Message{
+			ID:        "m1",
+			GuildID:   "g1",
+			ChannelID: "c1",
+			Content:   "after",
+			Author:    &discordgo.User{ID: "u1"},
+		},
+	})
+	if !found || changed {
+		t.Errorf("phantom update: found=%v changed=%v, want true/false", found, changed)
+	}
+
+	// Updating an unknown message is a no-op (must not panic or insert), and
+	// must be reported as not found so callers treat it as unverifiable
+	// (e.g. an ancient message outside our bounded cache window).
+	found, changed = c.UpdateMessage(&discordgo.MessageUpdate{
 		Message: &discordgo.Message{ID: "ghost", GuildID: "g1", Author: &discordgo.User{ID: "u1"}},
 	})
+	if found || changed {
+		t.Errorf("unknown update: found=%v changed=%v, want false/false", found, changed)
+	}
 	if n := len(c.GetGuildRecentMessages("g1", 10)); n != 1 {
 		t.Errorf("unknown update changed cache size to %d", n)
 	}

@@ -57,7 +57,15 @@ func (d *Discord) messageCreateHandler(s *discordgo.Session, m *discordgo.Messag
 // messageUpdateHandler handles edited messages in guilds
 //
 //	It ignores messages from bots and itself, as well as private messages (DMs).
-//	It updates the message in cache and calls the common moderation function.
+//	It updates the message in cache and calls the common moderation function, but only for genuine edits.
+//
+//	Discord's MESSAGE_UPDATE gateway event fires not only on real text edits, but also whenever Discord itself
+//	refreshes a message's link embed or attachment metadata (e.g. a delayed link preview crawl). Such "phantom" updates
+//	resend the message's current content completely unmodified, and can fire at any time, even years after the message
+//	was posted and regardless of the author. Treating them like real edits caused a bug where automod re-scanned a
+//	years-old message and banned its (uninvolved) author for a banned word that was never actually re-submitted.
+//	Docs: https://discord.com/developers/docs/events/gateway-events#message-update
+//	      https://discord.com/developers/docs/resources/message#message-object (edited_timestamp)
 func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m == nil || m.Message == nil || shouldIgnoreMessage(s, m.Message) {
 		return
@@ -68,8 +76,16 @@ func (d *Discord) messageUpdateHandler(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
-	// Update the message in cache
-	d.cache.UpdateMessage(m)
+	// Update the message in cache, and learn whether this is a message we
+	// already know about and whether its content/attachments actually changed.
+	found, changed := d.cache.UpdateMessage(m)
+
+	// Only re-run moderation checks on genuine edits (see the function-level
+	// doc comment above and Cache.UpdateMessage for the full rationale).
+	if !found || !changed {
+		return
+	}
+
 	// Use the common moderation function
 	d.moderateMessage(s, m.Message)
 }
@@ -91,6 +107,12 @@ func (d *Discord) moderateMessage(s discordSender, m *discordgo.Message) {
 	}
 	// Ignore messages from moderators
 	if d.db.UserHasModerationRole(m.GuildID, m.Member) {
+		return
+	}
+	// Ignore messages from the guild owner: they are never subject to automoderation (they can't be kicked/banned
+	// by Discord's own rules anyway), and this acts as a safety net against bugs/edge cases that would otherwise
+	// wrongly target them.
+	if guild, err := s.Guild(m.GuildID); err == nil && guild != nil && guild.OwnerID == m.Author.ID {
 		return
 	}
 	// Ignore if the message is sent in an excluded channel
