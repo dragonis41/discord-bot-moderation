@@ -195,6 +195,10 @@ func (c *Cache) UpdateMessage(m *discordgo.MessageUpdate) (found bool, changed b
 	// Update attachment info if available in the update event
 	if m.Attachments != nil {
 		cache[index].AttachmentCount = len(m.Attachments)
+		cache[index].AttachmentNames = attachmentNames(m.Attachments)
+	}
+	if m.StickerItems != nil {
+		cache[index].Stickers = cachedStickers(m.StickerItems)
 	}
 	if m.Embeds != nil {
 		cache[index].HasEmbeds = len(m.Embeds) > 0
@@ -209,10 +213,19 @@ func (c *Cache) IncrementViolation(guildID, userID string) int {
 	c.userViolationsMu.Lock()
 	defer c.userViolationsMu.Unlock()
 
+	now := time.Now()
+
+	// Opportunistically evict expired entries for other users so the map stays bounded.
+	if c.violationWindow > 0 {
+		for k, v := range c.userViolations {
+			if now.Sub(v.LastViolation) > c.violationWindow {
+				delete(c.userViolations, k)
+			}
+		}
+	}
+
 	key := guildID + ":" + userID
 	violation, exists := c.userViolations[key]
-
-	now := time.Now()
 
 	if !exists {
 		// First violation
@@ -312,16 +325,23 @@ func (c *Cache) MarkUserAsPendingBan(guildID, userID string) bool {
 	c.pendingBansMu.Lock()
 	defer c.pendingBansMu.Unlock()
 
+	now := time.Now()
+	for k, t := range c.pendingBans {
+		if now.Sub(t) >= 60*time.Second {
+			delete(c.pendingBans, k)
+		}
+	}
+
 	key := guildID + ":" + userID
 
 	// Check if already pending (within last 60 seconds)
 	if pendingTime, exists := c.pendingBans[key]; exists {
-		if time.Since(pendingTime) < 60*time.Second {
+		if now.Sub(pendingTime) < 60*time.Second {
 			return false // Already pending
 		}
 	}
 
-	c.pendingBans[key] = time.Now()
+	c.pendingBans[key] = now
 	return true
 }
 
