@@ -2,12 +2,16 @@ package utils
 
 // SplitMessage splits a long message into multiple parts based on the limit
 func SplitMessage(message string, limit int) []string {
-	if len(message) <= limit {
+	if limit <= 0 {
+		return []string{message}
+	}
+
+	runes := []rune(message)
+	if len(runes) <= limit {
 		return []string{message}
 	}
 
 	var messages []string
-	runes := []rune(message)
 
 	for len(runes) > 0 {
 		if len(runes) <= limit {
