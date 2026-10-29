@@ -41,13 +41,14 @@ func (d *Discord) showStatus(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 
 	// Connected servers
+	guilds := stateGuilds(s)
 	connectedServers := ""
-	for _, guild := range s.State.Guilds {
+	for _, guild := range guilds {
 		connectedServers += fmt.Sprintf("- [%s] (ID: %s)\n", d.guildDisplayName(guild), guild.ID)
 	}
 	fields = append(fields, &discordgo.MessageEmbedField{
 		Name:   i18n.T(lang, "status.servers"),
-		Value:  i18n.T(lang, "status.servers_value", len(s.State.Guilds), connectedServers),
+		Value:  truncate(i18n.T(lang, "status.servers_value", len(guilds), connectedServers), 1024),
 		Inline: false,
 	})
 
@@ -147,7 +148,7 @@ func (d *Discord) getMessageHistory(s *discordgo.Session, i *discordgo.Interacti
 	}
 
 	// Format the messages and send them as an attachment
-	messageContent := i18n.T(lang, "history.header", limit)
+	messageContent := i18n.T(lang, "history.header", len(historyMessages))
 	for _, msg := range historyMessages {
 		// Use cached username
 		username := msg.AuthorUsername

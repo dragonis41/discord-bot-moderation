@@ -42,11 +42,12 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 		reason = i18n.T(lang, "report.no_reason")
 	}
 
+	reporterName := interactionUsername(i)
 	d.logInfo(i.GuildID, "reportUser()", "Got command [%s] from user [%s] to report the user [%s] for the reason [%s]",
-		i.ApplicationCommandData().Name, i.Member.User.Username, reportedUser.Username, reason)
+		i.ApplicationCommandData().Name, reporterName, reportedUser.Username, reason)
 
 	// Log the report in the database
-	if err := d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, reportedUser.Username, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", i.Member.User.Username, reason)); err != nil {
+	if err := d.db.AddModerationLogEntry(i.GuildID, model.ActionReport, reportedUser.ID, reportedUser.Username, "report_user_command", fmt.Sprintf("Reported by %s for reason: %s", reporterName, reason)); err != nil {
 		d.logError(i.GuildID, "reportUser()", "Error logging report to database: %s", err)
 	}
 
@@ -87,7 +88,7 @@ func (d *Discord) reportUser(s *discordgo.Session, i *discordgo.InteractionCreat
 			Content:    modRoleMentions,
 			Components: buildReportActionButtons(reportedUser.ID),
 			Embed: &discordgo.MessageEmbed{
-				Title:       i18n.T(lang, "report.alert_title", i.Member.User.Username),
+				Title:       i18n.T(lang, "report.alert_title", reporterName),
 				Description: description,
 				Color:       model.Red.Int(),
 				Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.alert_footer")},
@@ -118,23 +119,35 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	lang := d.lang(i.GuildID)
 
-	commands, err := s.ApplicationCommands(d.client.State.User.ID, i.GuildID)
-	if err != nil {
-		d.logError(i.GuildID, "showHelp()", "Error fetching application commands: %s", err)
+	var commands []*discordgo.ApplicationCommand
+	if s != nil && s.State != nil && s.State.User != nil {
+		var err error
+		commands, err = s.ApplicationCommands(s.State.User.ID, i.GuildID)
+		if err != nil {
+			d.logError(i.GuildID, "showHelp()", "Error fetching application commands: %s", err)
+		}
+	}
+	if len(commands) == 0 {
+		commands = d.buildSlashCommands()
 	}
 
 	var fields []*discordgo.MessageEmbedField
 	for _, cmd := range commands {
-		value := fmt.Sprintf("%s\n", cmd.Description)
+		var cmdLocs map[discordgo.Locale]string
+		if cmd.DescriptionLocalizations != nil {
+			cmdLocs = *cmd.DescriptionLocalizations
+		}
+		value := fmt.Sprintf("%s\n", localizedDescription(lang, cmd.Description, cmdLocs))
 		if len(cmd.Options) > 0 {
 			value += i18n.T(lang, "help.options_label") + "\n"
 			var requiredOptions string
 			var optionalOptions string
 			for _, option := range cmd.Options {
+				optDesc := localizedDescription(lang, option.Description, option.DescriptionLocalizations)
 				if option.Required {
-					requiredOptions += fmt.Sprintf("• `%s`: %s\n", option.Name, option.Description)
+					requiredOptions += fmt.Sprintf("• `%s`: %s\n", option.Name, optDesc)
 				} else {
-					optionalOptions += fmt.Sprintf("• `%s`: %s\n", option.Name, option.Description)
+					optionalOptions += fmt.Sprintf("• `%s`: %s\n", option.Name, optDesc)
 				}
 			}
 			if len(requiredOptions) > 0 {
@@ -159,4 +172,20 @@ func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate)
 		Fields:      fields,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func localizedDescription(lang i18n.Lang, fallback string, locs map[discordgo.Locale]string) string {
+	if locs != nil {
+		switch lang {
+		case i18n.FR:
+			if s, ok := locs[discordgo.French]; ok && s != "" {
+				return s
+			}
+		case i18n.ES:
+			if s, ok := locs[discordgo.SpanishES]; ok && s != "" {
+				return s
+			}
+		}
+	}
+	return fallback
 }

@@ -83,13 +83,21 @@ func selectionFooter(lang i18n.Lang) *discordgo.MessageEmbedFooter {
 	return &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "footer.selection_saved")}
 }
 
-// truncate shortens s to at most max characters, appending "..." when it had to
-// cut anything off.
+// truncate shortens s to at most max characters (runes), appending "..." when it
+// had to cut anything off. Operating on runes prevents slicing inside multi-byte
+// UTF-8 sequences (accented letters, emojis).
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max-3] + "..."
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }
 
 // sanitizeInlineCode makes user content safe to display inside a single-line
@@ -104,6 +112,12 @@ func sanitizeInlineCode(s string) string {
 		"\r", " ",
 	)
 	return replacer.Replace(s)
+}
+
+// sanitizeCodeBlock neutralizes backticks so user content cannot break out of a
+// fenced Discord code block (```...```) while preserving newlines.
+func sanitizeCodeBlock(s string) string {
+	return strings.ReplaceAll(s, "`", "ˋ")
 }
 
 // joinLinesWithLimit concatenates lines in order until adding the next one would
@@ -138,9 +152,24 @@ func (d *Discord) deferEphemeral(s discordClient, i *discordgo.InteractionCreate
 	return true
 }
 
+// interactionUsername safely extracts the invoking user's username from an
+// interaction without panicking if Member or User is nil.
+func interactionUsername(i *discordgo.InteractionCreate) string {
+	if i == nil || i.Interaction == nil {
+		return "<unknown>"
+	}
+	if i.Member != nil && i.Member.User != nil && i.Member.User.Username != "" {
+		return i.Member.User.Username
+	}
+	if i.User != nil && i.User.Username != "" {
+		return i.User.Username
+	}
+	return "<unknown>"
+}
+
 // logCommand records that a slash command was received from a user.
 func (d *Discord) logCommand(i *discordgo.InteractionCreate, function string) {
-	d.logInfo(i.GuildID, function, "Got command [%s] from user [%s]", i.ApplicationCommandData().Name, i.Member.User.Username)
+	d.logInfo(i.GuildID, function, "Got command [%s] from user [%s]", i.ApplicationCommandData().Name, interactionUsername(i))
 }
 
 // beginModCommand runs the common preamble shared by every moderator-only
@@ -154,15 +183,53 @@ func (d *Discord) beginModCommand(s discordClient, i *discordgo.InteractionCreat
 	return d.db.CheckModerationPermissionOnInteraction(s, i)
 }
 
+type componentPermissionResponder struct {
+	s discordClient
+}
+
+func (c componentPermissionResponder) FollowupMessageCreate(interaction *discordgo.Interaction, _ bool, data *discordgo.WebhookParams, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	err := c.s.InteractionRespond(interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds: data.Embeds,
+		},
+	}, options...)
+	return nil, err
+}
+
+// checkComponentPermission verifies moderator permissions for a message-component
+// interaction that has not yet been deferred, sending an ephemeral error response
+// if the caller lacks permission.
+func (d *Discord) checkComponentPermission(s discordClient, i *discordgo.InteractionCreate) bool {
+	return d.db.CheckModerationPermissionOnInteraction(componentPermissionResponder{s: s}, i)
+}
+
 // followup sends an ephemeral follow-up message containing the given embeds,
 // logging any send error under function.
 func (d *Discord) followup(s discordClient, i *discordgo.InteractionCreate, function string, embeds ...*discordgo.MessageEmbed) {
-	if _, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: embeds}); err != nil {
+	if _, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Flags:  discordgo.MessageFlagsEphemeral,
+		Embeds: embeds,
+	}); err != nil {
 		d.logError(i.GuildID, function, "Error sending follow-up message: %s", err)
 	}
 }
 
 // Guild helpers -------------------------------------------------------------
+
+// stateGuilds returns a snapshot of the session's connected guilds while holding
+// the state read lock so concurrent gateway events cannot race with iteration.
+func stateGuilds(s *discordgo.Session) []*discordgo.Guild {
+	if s == nil || s.State == nil {
+		return nil
+	}
+	s.State.RLock()
+	defer s.State.RUnlock()
+	guilds := make([]*discordgo.Guild, len(s.State.Guilds))
+	copy(guilds, s.State.Guilds)
+	return guilds
+}
 
 // guildDisplayName returns guild.Name, fetching the full guild from the API
 // when the cached state has an empty name. It never returns an empty string.

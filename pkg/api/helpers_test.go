@@ -20,13 +20,16 @@ func TestTruncate(t *testing.T) {
 		{"hello", 5, "hello"},          // exactly max: unchanged
 		{"hello world", 8, "hello..."}, // longer: cut to max-3 + "..."
 		{"abcdef", 4, "a..."},          // cut to 1 char + "..."
+		{"🚨🚨🚨🚨🚨", 4, "🚨..."},           // multi-byte UTF-8 runes are not split mid-rune
+		{"abcdef", 2, "ab"},            // max <= 3 does not panic
+		{"abcdef", 0, ""},              // max <= 0 returns empty
 	}
 	for _, tt := range tests {
 		if got := truncate(tt.in, tt.max); got != tt.want {
 			t.Errorf("truncate(%q, %d) = %q, want %q", tt.in, tt.max, got, tt.want)
 		}
-		if len(truncate(tt.in, tt.max)) > max(tt.max, len(tt.in)) {
-			t.Errorf("truncate(%q, %d) exceeded max length", tt.in, tt.max)
+		if len([]rune(truncate(tt.in, tt.max))) > max(tt.max, len([]rune(tt.in))) {
+			t.Errorf("truncate(%q, %d) exceeded max rune length", tt.in, tt.max)
 		}
 	}
 }
