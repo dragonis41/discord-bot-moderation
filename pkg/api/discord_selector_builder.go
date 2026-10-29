@@ -88,6 +88,7 @@ func (d *Discord) sendSelectPage(
 	} else {
 		// Create new message
 		if _, err := s.FollowupMessageCreate(interaction, true, &discordgo.WebhookParams{
+			Flags:      discordgo.MessageFlagsEphemeral,
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		}); err != nil {
@@ -106,7 +107,7 @@ func (d *Discord) buildSelectMessage(
 ) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	lang := d.lang(guildID)
 
-	totalPages := (len(items) + config.ItemsPerPage - 1) / config.ItemsPerPage
+	totalPages := max((len(items)+config.ItemsPerPage-1)/config.ItemsPerPage, 1)
 	page = max(0, min(page, totalPages-1))
 
 	start := page * config.ItemsPerPage
@@ -120,9 +121,10 @@ func (d *Discord) buildSelectMessage(
 	options := d.buildSelectMenuOptions(items[start:end], previouslySelected, config.EmojiName)
 
 	// Create components
-	minVal := 0
-	components := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
+	var components []discordgo.MessageComponent
+	if len(options) > 0 {
+		minVal := 0
+		components = append(components, discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
 					CustomID:    fmt.Sprintf("%s_select_menu_%d", config.Prefix, page),
@@ -132,7 +134,7 @@ func (d *Discord) buildSelectMessage(
 					Options:     options,
 				},
 			},
-		},
+		})
 	}
 
 	// Add navigation buttons
@@ -168,17 +170,11 @@ func (d *Discord) buildSelectMenuOptions(
 
 	options := make([]discordgo.SelectMenuOption, len(items))
 	for i, item := range items {
-		description := item.GetDescription()
-
-		// Discord has a 100 character limit for option descriptions
-		if len(description) > 100 {
-			description = description[:97] + "..."
-		}
-
+		// Discord has a 100 character limit for option labels and descriptions
 		option := discordgo.SelectMenuOption{
-			Label:       item.GetName(),
+			Label:       truncate(item.GetName(), maxSelectLabelLength),
 			Value:       item.GetID(),
-			Description: description,
+			Description: truncate(item.GetDescription(), maxSelectDescriptionLength),
 			Default:     selectedMap[item.GetID()],
 		}
 
@@ -250,6 +246,10 @@ func (d *Discord) handleSelection(
 		return
 	}
 
+	if !d.checkComponentPermission(s, i) {
+		return
+	}
+
 	// Respond immediately for all interactions
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
@@ -288,6 +288,8 @@ func (d *Discord) handleSelectionUpdate(
 	}
 
 	// Update selections
+	totalPages := max((len(items)+config.ItemsPerPage-1)/config.ItemsPerPage, 1)
+	page = max(0, min(page, totalPages-1))
 	start := page * config.ItemsPerPage
 	end := min(start+config.ItemsPerPage, len(items))
 
@@ -344,7 +346,11 @@ func (d *Discord) handlePageNavigation(
 		currentPage++
 	}
 
-	items, _ := itemsFetcher(s, i.GuildID)
+	items, err := itemsFetcher(s, i.GuildID)
+	if err != nil {
+		d.logError(i.GuildID, "handlePageNavigation()", "Error fetching items: %s", err)
+		return
+	}
 	d.editSelectMessage(s, i, items, currentPage, config, dbOps)
 }
 
@@ -398,7 +404,7 @@ func (d *Discord) handleSelectionDone(
 		Components: &[]discordgo.MessageComponent{},
 	})
 
-	d.logInfo(i.GuildID, "handleSelectionDone()", "User [%s] finished selecting %d items for guild [%s]", i.Member.User.Username, len(selectedIDs), i.GuildID)
+	d.logInfo(i.GuildID, "handleSelectionDone()", "User [%s] finished selecting %d items for guild [%s]", interactionUsername(i), len(selectedIDs), i.GuildID)
 }
 
 // editSelectMessage edits the selection message
@@ -541,6 +547,7 @@ func (a *AutomodSettingsDB) Add(guildID, itemID string) error {
 
 func (d *Discord) sendErrorMessage(s discordClient, i *discordgo.Interaction, lang i18n.Lang, title, description string) {
 	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
+		Flags: discordgo.MessageFlagsEphemeral,
 		Embeds: []*discordgo.MessageEmbed{{
 			Title:       title,
 			Description: description,

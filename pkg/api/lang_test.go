@@ -57,6 +57,18 @@ func TestHandleLanguageSelectionIgnoresOtherComponents(t *testing.T) {
 	}
 }
 
+func TestHandleLanguageSelectionPermissionDenied(t *testing.T) {
+	fs := &fakeStore{denyPermission: true}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.applyLanguageSelection(fake, componentInteraction(langSelectCustomID, "es"))
+
+	if len(fs.savedLangs) != 0 {
+		t.Errorf("non-moderator must not change the language, got %v", fs.savedLangs)
+	}
+}
+
 func TestLangUpdatedMessageUsesNewLanguage(t *testing.T) {
 	// The confirmation must be written in the newly chosen language.
 	msg := i18n.T(i18n.ES, "lang.updated", i18n.Name(i18n.ES))

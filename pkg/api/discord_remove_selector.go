@@ -237,6 +237,9 @@ func (d *Discord) handleRemoveSelection(s discordClient, i *discordgo.Interactio
 	if !strings.HasPrefix(customID, sel.prefix+"_") {
 		return
 	}
+	if !d.checkComponentPermission(s, i) {
+		return
+	}
 
 	switch {
 	case strings.HasPrefix(customID, sel.prefix+"_select_"):
@@ -291,7 +294,7 @@ func (d *Discord) handleRemoveDelete(s discordClient, i *discordgo.InteractionCr
 	d.respondRemoveUpdate(s, i, sel, opts, page, removeNotice(sel, removed), function)
 
 	if len(removed) > 0 {
-		d.logSuccess(i.GuildID, function, "User [%s] removed %d %s entry/entries for guild [%s]", i.Member.User.Username, len(removed), sel.noun, i.GuildID)
+		d.logSuccess(i.GuildID, function, "User [%s] removed %d %s entry/entries for guild [%s]", interactionUsername(i), len(removed), sel.noun, i.GuildID)
 	}
 }
 
