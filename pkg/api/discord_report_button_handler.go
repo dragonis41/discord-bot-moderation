@@ -45,6 +45,10 @@ func buildReportActionButtons(userID string) []discordgo.MessageComponent {
 }
 
 func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	d.handleReportAction(s, i)
+}
+
+func (d *Discord) handleReportAction(s discordClient, i *discordgo.InteractionCreate) {
 	// Check if this is a message component interaction
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
@@ -134,6 +138,10 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		if err := d.db.AddModerationLogEntry(i.GuildID, modAction, ReportedUser.ID, ReportedUser.Username, "report_action_button", fmt.Sprintf("%s (by %s)", auditReason, modUsername)); err != nil {
 			d.logError(i.GuildID, "handleReportActions()", "Error logging moderation action to database: %s", err)
 		}
+	}
+
+	if d.cache != nil {
+		d.cache.ClearPendingReport(i.GuildID, userID)
 	}
 
 	d.logSuccess(i.GuildID, "handleReportActions()", "%s", logMessage)

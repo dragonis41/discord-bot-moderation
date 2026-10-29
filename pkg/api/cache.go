@@ -37,6 +37,30 @@ type UserViolation struct {
 	LastViolation  time.Time
 }
 
+// ReportMessageRef identifies a moderation report message sent to a channel
+type ReportMessageRef struct {
+	ChannelID string
+	MessageID string
+}
+
+// ReportReasonEntry holds an additional report reason and its reporter
+type ReportReasonEntry struct {
+	Reporter string
+	Reason   string
+}
+
+// PendingReport tracks an unresolved user report in a guild
+type PendingReport struct {
+	GuildID           string
+	ReportedUserID    string
+	ReportedUsername  string
+	OriginChannelID   string
+	InitialReporter   string
+	InitialReason     string
+	AdditionalReasons []ReportReasonEntry
+	Messages          []ReportMessageRef
+}
+
 // Cache handles message caching and violation tracking
 type Cache struct {
 	// messageCache stores the last N messages per guild in chronological order
@@ -64,6 +88,13 @@ type Cache struct {
 	// pendingBansMu protects concurrent access to pendingBans
 	pendingBansMu sync.RWMutex
 
+	// pendingReports tracks active moderation report messages per user per guild
+	// Key: "guildID:userID", Value: pointer to PendingReport
+	pendingReports map[string]*PendingReport
+
+	// pendingReportsMu protects concurrent access to pendingReports
+	pendingReportsMu sync.RWMutex
+
 	// maxCacheSize defines the maximum number of messages to store per guild
 	maxCacheSize int
 
@@ -81,6 +112,7 @@ func NewCache(maxCacheSize, violationThreshold int, violationWindow time.Duratio
 		messageCacheIndex:  make(map[string]map[string]int),
 		userViolations:     make(map[string]*UserViolation),
 		pendingBans:        make(map[string]time.Time),
+		pendingReports:     make(map[string]*PendingReport),
 		maxCacheSize:       maxCacheSize,
 		violationThreshold: violationThreshold,
 		violationWindow:    violationWindow,
@@ -367,6 +399,68 @@ func (c *Cache) ClearPendingBan(guildID, userID string) {
 
 	key := guildID + ":" + userID
 	delete(c.pendingBans, key)
+}
+
+func clonePendingReport(r *PendingReport) *PendingReport {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	if len(r.AdditionalReasons) > 0 {
+		cp.AdditionalReasons = make([]ReportReasonEntry, len(r.AdditionalReasons))
+		copy(cp.AdditionalReasons, r.AdditionalReasons)
+	}
+	if len(r.Messages) > 0 {
+		cp.Messages = make([]ReportMessageRef, len(r.Messages))
+		copy(cp.Messages, r.Messages)
+	}
+	return &cp
+}
+
+// GetPendingReport returns a copy of the pending report for a user in a guild, or nil if none exists
+func (c *Cache) GetPendingReport(guildID, userID string) *PendingReport {
+	c.pendingReportsMu.RLock()
+	defer c.pendingReportsMu.RUnlock()
+
+	key := guildID + ":" + userID
+	return clonePendingReport(c.pendingReports[key])
+}
+
+// SetPendingReport stores a pending report for a user in a guild
+func (c *Cache) SetPendingReport(report PendingReport) {
+	c.pendingReportsMu.Lock()
+	defer c.pendingReportsMu.Unlock()
+
+	key := report.GuildID + ":" + report.ReportedUserID
+	c.pendingReports[key] = clonePendingReport(&report)
+}
+
+// AddPendingReportReason appends an additional reason to an existing pending report and returns its updated state
+func (c *Cache) AddPendingReportReason(guildID, userID, reporter, reason string) *PendingReport {
+	c.pendingReportsMu.Lock()
+	defer c.pendingReportsMu.Unlock()
+
+	key := guildID + ":" + userID
+	report, exists := c.pendingReports[key]
+	if !exists {
+		return nil
+	}
+	if reason != "" {
+		report.AdditionalReasons = append(report.AdditionalReasons, ReportReasonEntry{
+			Reporter: reporter,
+			Reason:   reason,
+		})
+	}
+	return clonePendingReport(report)
+}
+
+// ClearPendingReport removes a pending report for a user in a guild
+func (c *Cache) ClearPendingReport(guildID, userID string) {
+	c.pendingReportsMu.Lock()
+	defer c.pendingReportsMu.Unlock()
+
+	key := guildID + ":" + userID
+	delete(c.pendingReports, key)
 }
 
 func cachedStickers(items []*discordgo.StickerItem) []CachedSticker {
