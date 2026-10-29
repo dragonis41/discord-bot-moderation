@@ -28,7 +28,7 @@ func NewDatabase() (*Database, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite3", "./data/sqlite3.db")
+	db, err := sql.Open("sqlite3", "./data/sqlite3.db?_busy_timeout=5000&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

@@ -49,11 +49,12 @@ func TestLogsConfigIsSetReporting(t *testing.T) {
 
 	// Moderation side is independent.
 	modSet, _ := d.IsMaxModerationLogEntriesSet("g1")
-	if !modSet {
-		// Setting the system column inserts the row; the moderation column then
-		// holds its table default, so IsSet reports true. This documents the
-		// current behavior so a future change is a conscious decision.
-		t.Log("moderation IsSet is false when only system column was written")
+	if modSet {
+		t.Error("IsMaxModerationLogEntriesSet = true when only system column was written, want false")
+	}
+	modMax, _ := d.GetMaxModerationLogEntries("g1")
+	if modMax != 1000 {
+		t.Errorf("GetMaxModerationLogEntries = %d when only system column was written, want 1000", modMax)
 	}
 }
 
