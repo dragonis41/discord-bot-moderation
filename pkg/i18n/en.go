@@ -61,6 +61,7 @@ var en = map[string]string{
 	// Banned words ----------------------------------------------------------
 	"bannedword.title":            "Banned word",
 	"bannedword.empty_word":       "The word cannot be empty.",
+	"bannedword.invalid_regex":    "The provided regular expression is invalid.",
 	"bannedword.add_error":        "An error occurred while adding the banned word.",
 	"bannedword.type_literal":     "literal",
 	"bannedword.type_regex":       "regex",

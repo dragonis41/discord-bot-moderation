@@ -45,6 +45,21 @@ func TestAddBannedWordCommandRejectsEmpty(t *testing.T) {
 	}
 }
 
+func TestAddBannedWordCommandRejectsInvalidRegex(t *testing.T) {
+	fs := &fakeStore{}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.addBannedWord(fake, modInteraction("add-banned-word", strOpt("word", "[unclosed"), boolOpt("is_regex", true)))
+
+	if len(fs.addedWords) != 0 {
+		t.Errorf("invalid regex should not be added, got %d", len(fs.addedWords))
+	}
+	if len(fake.followups) != 1 {
+		t.Errorf("expected an error follow-up, got %d", len(fake.followups))
+	}
+}
+
 func TestAddBannedWordCommandPermissionDenied(t *testing.T) {
 	fs := &fakeStore{denyPermission: true}
 	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
@@ -121,6 +136,21 @@ func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
 	}
 	if fake.responds != 0 {
 		t.Errorf("unrelated component must not be answered, got %d", fake.responds)
+	}
+}
+
+func TestRemoveBannedWordSelectionPermissionDenied(t *testing.T) {
+	fs := &fakeStore{
+		denyPermission: true,
+		bannedWords:    []database.BannedWord{{ID: 7, WordPattern: "spam"}},
+	}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(i18n.EN), "test")
+
+	if len(fs.removedWords) != 0 {
+		t.Errorf("non-moderator must not delete words, got %v", fs.removedWords)
 	}
 }
 

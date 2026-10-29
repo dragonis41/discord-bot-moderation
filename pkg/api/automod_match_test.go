@@ -17,6 +17,9 @@ func TestBannedWordMatchesLiteral(t *testing.T) {
 		{"spam", true},                    // whole message
 		{"SPAM in caps", true},            // case-insensitive
 		{"stop, spam!", true},             // bounded by punctuation
+		{"<spam>", true},                  // bounded by symbols
+		{"$spam$", true},                  // bounded by currency symbols
+		{"😂spam😂", true},                  // bounded by emojis
 		{"spamming is different", false},  // substring, not a whole word
 		{"notspam", false},                // substring at end
 		{"clean message", false},          // absent
