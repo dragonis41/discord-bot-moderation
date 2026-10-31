@@ -463,6 +463,31 @@ func (c *Cache) ClearPendingReport(guildID, userID string) {
 	delete(c.pendingReports, key)
 }
 
+// RemovePendingReportMessage removes a specific message reference from any pending report
+// in the guild, deleting the pending report entry entirely if no messages remain.
+func (c *Cache) RemovePendingReportMessage(guildID, channelID, messageID string) {
+	c.pendingReportsMu.Lock()
+	defer c.pendingReportsMu.Unlock()
+
+	prefix := guildID + ":"
+	for key, report := range c.pendingReports {
+		if guildID != "" && !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		filtered := report.Messages[:0]
+		for _, msg := range report.Messages {
+			if msg.ChannelID != channelID || msg.MessageID != messageID {
+				filtered = append(filtered, msg)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(c.pendingReports, key)
+		} else {
+			report.Messages = filtered
+		}
+	}
+}
+
 func cachedStickers(items []*discordgo.StickerItem) []CachedSticker {
 	stickers := make([]CachedSticker, len(items))
 	for i, s := range items {

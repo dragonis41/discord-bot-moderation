@@ -124,6 +124,7 @@ func (d *Discord) RunDiscordBot() {
 	d.client.AddHandler(d.handleLanguageSelection)            // Handler for the server language selection
 	d.client.AddHandler(d.messageCreateHandler)               // Handler for message creation events
 	d.client.AddHandler(d.messageUpdateHandler)               // Handler for message update events
+	d.client.AddHandler(d.messageDeleteHandler)               // Handler for message deletion events
 	d.client.AddHandler(d.handleReportActions)                // Handler for report action buttons (kick/ban)
 	d.client.AddHandler(d.guildCreateHandler)                 // Handler to register commands when bot joins a new guild
 

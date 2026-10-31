@@ -258,4 +258,19 @@ func TestCachePendingReport(t *testing.T) {
 	if got := c.GetPendingReport("g1", "u1"); got != nil {
 		t.Errorf("expected nil after ClearPendingReport, got %+v", got)
 	}
+
+	// RemovePendingReportMessage deletes the pending report once its last message is removed.
+	c.SetPendingReport(PendingReport{
+		GuildID:        "g1",
+		ReportedUserID: "u1",
+		Messages:       []ReportMessageRef{{ChannelID: "mod1", MessageID: "m1"}, {ChannelID: "mod2", MessageID: "m2"}},
+	})
+	c.RemovePendingReportMessage("g1", "mod1", "m1")
+	if got := c.GetPendingReport("g1", "u1"); got == nil || len(got.Messages) != 1 || got.Messages[0].MessageID != "m2" {
+		t.Fatalf("expected only m2 remaining, got %+v", got)
+	}
+	c.RemovePendingReportMessage("g1", "mod2", "m2")
+	if got := c.GetPendingReport("g1", "u1"); got != nil {
+		t.Errorf("expected pending report to be removed when no messages remain, got %+v", got)
+	}
 }

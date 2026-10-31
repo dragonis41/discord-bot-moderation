@@ -208,8 +208,9 @@ type fakeSender struct {
 	messageEdits  []*discordgo.MessageEdit
 
 	// Configurable lookups.
-	guildChannels []*discordgo.Channel
-	guildRoles    []*discordgo.Role
+	guildChannels  []*discordgo.Channel
+	guildRoles     []*discordgo.Role
+	messageEditErr error
 }
 
 type complexSendCall struct {
@@ -312,6 +313,9 @@ func (f *fakeSender) ChannelMessageSendComplex(channelID string, data *discordgo
 }
 
 func (f *fakeSender) ChannelMessageEditComplex(m *discordgo.MessageEdit, _ ...discordgo.RequestOption) (*discordgo.Message, error) {
+	if f.messageEditErr != nil {
+		return nil, f.messageEditErr
+	}
 	f.messageEdits = append(f.messageEdits, m)
 	return &discordgo.Message{}, nil
 }
