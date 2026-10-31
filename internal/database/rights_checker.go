@@ -43,6 +43,11 @@ func (d *Database) UserHasModerationRole(guildID string, member *discordgo.Membe
 		return true
 	}
 
+	// Server administrators (including the guild owner on interactions) always have moderation rights
+	if member.Permissions&discordgo.PermissionAdministrator != 0 {
+		return true
+	}
+
 	modRoles, err := d.GetModerationRolesByGuildId(guildID)
 	if err != nil {
 		return false
