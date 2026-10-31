@@ -38,4 +38,12 @@ func TestUserHasModerationRole(t *testing.T) {
 	if d.UserHasModerationRole("g1", &discordgo.Member{Roles: nil}) {
 		t.Error("member with no roles should be denied")
 	}
+
+	// Member with Administrator permission is allowed even without a configured mod role.
+	if !d.UserHasModerationRole("g1", &discordgo.Member{
+		Roles:       []string{"other"},
+		Permissions: discordgo.PermissionAdministrator,
+	}) {
+		t.Error("member with Administrator permission should be allowed")
+	}
 }
