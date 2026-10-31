@@ -53,6 +53,19 @@ func TestHandleSelectionIgnoresNonComponent(t *testing.T) {
 	}
 }
 
+func TestHandleSelectionPermissionDenied(t *testing.T) {
+	fs := &fakeStore{denyPermission: true}
+	d := newTestDiscordWith(fs, nil)
+	fake := &fakeSender{}
+	dbOps := &fakeDBOps{}
+
+	d.handleSelection(fake, componentInteraction("p_select_menu_0", "c1"), chainConfig(), dbOps, chainFetcher, nil)
+
+	if dbOps.cleared != 0 || len(dbOps.added) != 0 {
+		t.Error("non-moderator must not modify selections")
+	}
+}
+
 func TestHandleSelectionUpdate(t *testing.T) {
 	d := newTestDiscord()
 	fake := &fakeSender{}
@@ -69,6 +82,20 @@ func TestHandleSelectionUpdate(t *testing.T) {
 	if len(dbOps.added) != 1 || dbOps.added[0] != "c1" {
 		t.Errorf("expected c1 to be persisted, added=%v", dbOps.added)
 	}
+	if len(fake.responseEdits) != 1 {
+		t.Errorf("expected the message to be re-rendered once, got %d edits", len(fake.responseEdits))
+	}
+}
+
+func TestHandleSelectionUpdateOutOfRangePageDoesNotPanic(t *testing.T) {
+	d := newTestDiscord()
+	fake := &fakeSender{}
+	dbOps := &fakeDBOps{selected: nil}
+
+	// If channels/roles were deleted while the menu was open on a higher page,
+	// page clamping must prevent a slice bounds panic.
+	d.handleSelection(fake, componentInteraction("p_select_menu_5", "c1"), chainConfig(), dbOps, chainFetcher, nil)
+
 	if len(fake.responseEdits) != 1 {
 		t.Errorf("expected the message to be re-rendered once, got %d edits", len(fake.responseEdits))
 	}

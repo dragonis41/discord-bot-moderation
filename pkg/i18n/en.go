@@ -8,17 +8,18 @@ var en = map[string]string{
 	"footer.selection_saved": "Selections are saved on every change.",
 
 	// /report ---------------------------------------------------------------
-	"report.title":           "Report",
-	"report.user_not_found":  "The specified user could not be found. Please check the ID and try again.",
-	"report.no_mod_roles":    "No moderation role is configured for this server. Please contact an administrator.",
-	"report.error_generic":   "An error occurred while processing your request. Please contact a moderator.",
-	"report.no_mod_channels": "No moderation channel is configured for this server. Please contact an administrator.",
-	"report.description":     "**Reported user**: <@!%s> (%s | %s)\n**Channel**: <#%s>\n**Reason**: %s\n\n**Recent messages**:\n%s",
-	"report.alert_title":     "🚨 New report by %s",
-	"report.alert_footer":    "No action has been taken yet.",
-	"report.received":        "User %s has been reported to the moderation team.",
-	"report.received_footer": "Thank you for helping keep this server healthy.",
-	"report.no_reason":       "No reason provided",
+	"report.title":             "Report",
+	"report.user_not_found":    "The specified user could not be found. Please check the ID and try again.",
+	"report.no_mod_roles":      "No moderation role is configured for this server. Please contact an administrator.",
+	"report.error_generic":     "An error occurred while processing your request. Please contact a moderator.",
+	"report.no_mod_channels":   "No moderation channel is configured for this server. Please contact an administrator.",
+	"report.description":       "**Reported user**: <@!%s> (%s | %s)\n**Channel**: <#%s>\n**Reason**: %s\n\n**Recent messages**:\n%s",
+	"report.alert_title":       "🚨 New report by %s",
+	"report.alert_footer":      "No action has been taken yet.",
+	"report.received":          "User %s has been reported to the moderation team.",
+	"report.received_footer":   "Thank you for helping keep this server healthy.",
+	"report.no_reason":         "No reason provided",
+	"report.additional_reason": "\n• %s (by %s)",
 
 	// /help -----------------------------------------------------------------
 	"help.title":          "💡 Help",
@@ -61,6 +62,7 @@ var en = map[string]string{
 	// Banned words ----------------------------------------------------------
 	"bannedword.title":            "Banned word",
 	"bannedword.empty_word":       "The word cannot be empty.",
+	"bannedword.invalid_regex":    "The provided regular expression is invalid.",
 	"bannedword.add_error":        "An error occurred while adding the banned word.",
 	"bannedword.type_literal":     "literal",
 	"bannedword.type_regex":       "regex",

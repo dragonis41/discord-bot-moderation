@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dragonis41/discord-bot-moderation/pkg/i18n"
+	"github.com/dragonis41/discord-bot-moderation/pkg/model"
 )
 
 // buildReportActionButtons creates the action buttons for report messages
@@ -44,6 +45,10 @@ func buildReportActionButtons(userID string) []discordgo.MessageComponent {
 }
 
 func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	d.handleReportAction(s, i)
+}
+
+func (d *Discord) handleReportAction(s discordClient, i *discordgo.InteractionCreate) {
 	// Check if this is a message component interaction
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
@@ -94,28 +99,33 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	guildName := guildNameByID(s, i.GuildID)
+	modUsername := interactionUsername(i)
 
 	// Perform the action
 	var actionErr error
 	var successMessage string
 	var logMessage string
+	var modAction model.ModerationLogAction
+	var auditReason string
 
 	switch action {
 	case "kick":
-		reason := i18n.T(lang, "report_action.audit_kick", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
+		auditReason = i18n.T(lang, "report_action.audit_kick", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
 		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, i18n.T(lang, "report_action.kick_dm", guildName, time.Now().Unix()))
-		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, reason)
+		actionErr = s.GuildMemberDeleteWithReason(i.GuildID, userID, auditReason)
 		successMessage = i18n.T(lang, "report_action.kicked", ReportedUser.Username)
-		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", i.Member.User.Username, ReportedUser.Username)
+		logMessage = fmt.Sprintf("User [%s] kicked user [%s] via report", modUsername, ReportedUser.Username)
+		modAction = model.ActionKick
 	case "ban":
-		reason := i18n.T(lang, "report_action.audit_ban", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
+		auditReason = i18n.T(lang, "report_action.audit_ban", time.Now().UTC().Format("02/01/2006 15:04 UTC"))
 		d.sendPrivateMessageOnInteraction(s, i, ReportedUser, i18n.T(lang, "report_action.ban_dm", guildName, time.Now().Unix()))
-		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, reason, 1)
+		actionErr = s.GuildBanCreateWithReason(i.GuildID, userID, auditReason, 1)
 		successMessage = i18n.T(lang, "report_action.banned", ReportedUser.Username)
-		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", i.Member.User.Username, ReportedUser.Username)
+		logMessage = fmt.Sprintf("User [%s] banned user [%s] via report", modUsername, ReportedUser.Username)
+		modAction = model.ActionBan
 	default:
 		successMessage = i18n.T(lang, "report_action.ignored", ReportedUser.Username)
-		logMessage = fmt.Sprintf("User [%s] ignored report for user [%s]", i.Member.User.Username, ReportedUser.Username)
+		logMessage = fmt.Sprintf("User [%s] ignored report for user [%s]", modUsername, ReportedUser.Username)
 	}
 
 	if actionErr != nil {
@@ -124,18 +134,38 @@ func (d *Discord) handleReportActions(s *discordgo.Session, i *discordgo.Interac
 		return
 	}
 
+	if modAction != "" {
+		if err := d.db.AddModerationLogEntry(i.GuildID, modAction, ReportedUser.ID, ReportedUser.Username, "report_action_button", fmt.Sprintf("%s (by %s)", auditReason, modUsername)); err != nil {
+			d.logError(i.GuildID, "handleReportActions()", "Error logging moderation action to database: %s", err)
+		}
+	}
+
+	if d.cache != nil {
+		d.cache.ClearPendingReport(i.GuildID, userID)
+	}
+
 	d.logSuccess(i.GuildID, "handleReportActions()", "%s", logMessage)
 
 	// Send success message
 	d.followup(s, i, "handleReportActions()", successEmbed(lang, i18n.T(lang, "report_action.done_title"), successMessage))
 
+	if i.Message == nil {
+		return
+	}
+
 	// Update the original report message to show the action was taken
-	updatedEmbed := i.Message.Embeds[0]
+	var updatedEmbed *discordgo.MessageEmbed
+	if len(i.Message.Embeds) > 0 && i.Message.Embeds[0] != nil {
+		embedCopy := *i.Message.Embeds[0]
+		updatedEmbed = &embedCopy
+	} else {
+		updatedEmbed = &discordgo.MessageEmbed{}
+	}
 	// Use Discord's timestamp in embed description for local time display
 	if updatedEmbed.Description != "" {
-		updatedEmbed.Description += i18n.T(lang, "report_action.taken", action, i.Member.User.Username, time.Now().Unix())
+		updatedEmbed.Description += i18n.T(lang, "report_action.taken", action, modUsername, time.Now().Unix())
 	} else {
-		updatedEmbed.Description = strings.TrimPrefix(i18n.T(lang, "report_action.taken", action, i.Member.User.Username, time.Now().Unix()), "\n\n")
+		updatedEmbed.Description = strings.TrimPrefix(i18n.T(lang, "report_action.taken", action, modUsername, time.Now().Unix()), "\n\n")
 	}
 	updatedEmbed.Footer = nil
 

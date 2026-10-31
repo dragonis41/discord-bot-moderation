@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -82,14 +83,16 @@ type discordClient interface {
 	GuildChannels(guildID string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error)
 	GuildRoles(guildID string, options ...discordgo.RequestOption) ([]*discordgo.Role, error)
 	User(userID string, options ...discordgo.RequestOption) (*discordgo.User, error)
+	ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error)
 	ChannelMessageEditComplex(m *discordgo.MessageEdit, options ...discordgo.RequestOption) (*discordgo.Message, error)
 }
 
 type Discord struct {
-	log    *logger.Logger
-	db     store
-	client *discordgo.Session
-	cache  *Cache
+	log              *logger.Logger
+	db               store
+	client           *discordgo.Session
+	cache            *Cache
+	registeredGuilds sync.Map
 }
 
 func NewClient(log *logger.Logger, db store, discordClient *discordgo.Session, cache *Cache) *Discord {
@@ -177,15 +180,20 @@ func (d *Discord) guildCreateHandler(s *discordgo.Session, g *discordgo.GuildCre
 
 func (d *Discord) registerSlashCommands() {
 	// Register commands for each guild the bot is connected to.
-	for _, guild := range d.client.State.Guilds {
+	for _, guild := range stateGuilds(d.client) {
 		d.registerSlashCommandsForGuild(guild.ID)
 	}
 }
 
 func (d *Discord) registerSlashCommandsForGuild(guildID string) {
+	if _, loaded := d.registeredGuilds.LoadOrStore(guildID, true); loaded {
+		return
+	}
+
 	commands := d.buildSlashCommands()
 	_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guildID, commands)
 	if err != nil {
+		d.registeredGuilds.Delete(guildID)
 		d.logError(guildID, "registerSlashCommandsForGuild()", "Cannot register commands for guild %s: %v", guildID, err)
 		return
 	}
@@ -392,7 +400,8 @@ func (d *Discord) removeSlashCommands() {
 	fmt.Printf("\n")
 	log.Printf("Shutting down, removing slash commands...\n")
 
-	for _, guild := range d.client.State.Guilds {
+	for _, guild := range stateGuilds(d.client) {
+		d.registeredGuilds.Delete(guild.ID)
 		// Pass an empty slice to remove all commands
 		_, err := d.client.ApplicationCommandBulkOverwrite(d.client.State.User.ID, guild.ID, []*discordgo.ApplicationCommand{})
 		if err != nil {

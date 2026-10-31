@@ -23,7 +23,7 @@ type DiscordUtilsInterface interface {
 
 func (d *Discord) displayConnectedGuilds() {
 	fmt.Printf("\n============== Connected Servers ==============\n")
-	for _, guild := range d.client.State.Guilds {
+	for _, guild := range stateGuilds(d.client) {
 		fmt.Printf("- [%s] (ID: %s)\n", d.guildDisplayName(guild), guild.ID)
 	}
 	fmt.Printf("===============================================\n\n")
@@ -31,7 +31,7 @@ func (d *Discord) displayConnectedGuilds() {
 
 func (d *Discord) setMaxLogRetention() {
 	// Set default max log entries for each connected guild
-	for _, guild := range d.client.State.Guilds {
+	for _, guild := range stateGuilds(d.client) {
 		// Set default max system log entries
 		systemLogIsSet, err := d.db.IsMaxSystemLogEntriesSet(guild.ID)
 		if err != nil {
@@ -58,7 +58,7 @@ func (d *Discord) setMaxLogRetention() {
 
 // checkForGuildSetup checks if the guilds are properly set up in the database
 func (d *Discord) checkForGuildSetup() {
-	for _, guild := range d.client.State.Guilds {
+	for _, guild := range stateGuilds(d.client) {
 		name := d.guildDisplayName(guild)
 
 		modRoles, err := d.db.GetModerationRolesByGuildId(guild.ID)

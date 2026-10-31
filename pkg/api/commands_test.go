@@ -45,6 +45,21 @@ func TestAddBannedWordCommandRejectsEmpty(t *testing.T) {
 	}
 }
 
+func TestAddBannedWordCommandRejectsInvalidRegex(t *testing.T) {
+	fs := &fakeStore{}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.addBannedWord(fake, modInteraction("add-banned-word", strOpt("word", "[unclosed"), boolOpt("is_regex", true)))
+
+	if len(fs.addedWords) != 0 {
+		t.Errorf("invalid regex should not be added, got %d", len(fs.addedWords))
+	}
+	if len(fake.followups) != 1 {
+		t.Errorf("expected an error follow-up, got %d", len(fake.followups))
+	}
+}
+
 func TestAddBannedWordCommandPermissionDenied(t *testing.T) {
 	fs := &fakeStore{denyPermission: true}
 	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
@@ -121,6 +136,21 @@ func TestRemoveBannedWordSelectionIgnoresOtherComponents(t *testing.T) {
 	}
 	if fake.responds != 0 {
 		t.Errorf("unrelated component must not be answered, got %d", fake.responds)
+	}
+}
+
+func TestRemoveBannedWordSelectionPermissionDenied(t *testing.T) {
+	fs := &fakeStore{
+		denyPermission: true,
+		bannedWords:    []database.BannedWord{{ID: 7, WordPattern: "spam"}},
+	}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	d.handleRemoveSelection(fake, componentInteraction("rmword_select_0", "7"), d.bannedWordRemoveSelector(i18n.EN), "test")
+
+	if len(fs.removedWords) != 0 {
+		t.Errorf("non-moderator must not delete words, got %v", fs.removedWords)
 	}
 }
 
@@ -324,5 +354,79 @@ func TestSelectModeratorAndExcludedChannelsCommands(t *testing.T) {
 				t.Fatalf("expected the selection menu follow-up, got %d", len(fake.followups))
 			}
 		})
+	}
+}
+
+// --- Report command and duplicate-report deduplication -----------------------
+
+func reportInteractionFrom(reporterID, reporterName, channelID string, opts ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			GuildID:   "g1",
+			ChannelID: channelID,
+			Type:      discordgo.InteractionApplicationCommand,
+			Member:    &discordgo.Member{User: &discordgo.User{ID: reporterID, Username: reporterName}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name:    "report",
+				Options: opts,
+			},
+		},
+	}
+}
+
+func TestReportUserDeduplicatesPendingReports(t *testing.T) {
+	fs := &fakeStore{
+		modRoles:    []string{"r1"},
+		modChannels: []string{"mod1"},
+	}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	// First report creates the moderation message.
+	d.reportUser(fake, reportInteractionFrom("u-alice", "alice", "c1", userOpt("user", "u-bad"), strOpt("reason", "spamming")))
+
+	if len(fake.complexSends) != 1 {
+		t.Fatalf("expected 1 moderation message sent, got %d", len(fake.complexSends))
+	}
+	if len(fake.messageEdits) != 0 {
+		t.Fatalf("expected 0 message edits on first report, got %d", len(fake.messageEdits))
+	}
+
+	// Second report for the same user while pending with a new reason updates the existing message instead of creating a new one.
+	d.reportUser(fake, reportInteractionFrom("u-bob", "bob", "c1", userOpt("user", "u-bad"), strOpt("reason", "harassment")))
+
+	if len(fake.complexSends) != 1 {
+		t.Fatalf("expected no new moderation message when report is pending, got %d sends", len(fake.complexSends))
+	}
+	if len(fake.messageEdits) != 1 {
+		t.Fatalf("expected 1 message edit to add the new reason, got %d", len(fake.messageEdits))
+	}
+	editedDesc := (*fake.messageEdits[0].Embeds)[0].Description
+	if !strings.Contains(editedDesc, "spamming") || !strings.Contains(editedDesc, "harassment") || !strings.Contains(editedDesc, "bob") {
+		t.Errorf("updated description should contain both reasons and the second reporter, got %q", editedDesc)
+	}
+
+	// Third report for the same user while pending with an empty reason does not create a new message or edit in an empty reason.
+	d.reportUser(fake, reportInteractionFrom("u-charlie", "charlie", "c1", userOpt("user", "u-bad")))
+
+	if len(fake.complexSends) != 1 {
+		t.Fatalf("expected no new moderation message on empty-reason duplicate report, got %d sends", len(fake.complexSends))
+	}
+	if len(fake.messageEdits) != 1 {
+		t.Fatalf("expected no message edit when additional reason is empty, got %d edits", len(fake.messageEdits))
+	}
+
+	// Resolving the report via action button clears the pending state so a subsequent report creates a fresh message.
+	resolveInteraction := componentInteraction("report_ignore_u-bad")
+	resolveInteraction.ChannelID = "mod1"
+	resolveInteraction.Message = &discordgo.Message{
+		ID:     "msg-1",
+		Embeds: []*discordgo.MessageEmbed{(*fake.messageEdits[0].Embeds)[0]},
+	}
+	d.handleReportAction(fake, resolveInteraction)
+
+	d.reportUser(fake, reportInteractionFrom("u-dave", "dave", "c1", userOpt("user", "u-bad"), strOpt("reason", "new offense")))
+	if len(fake.complexSends) != 2 {
+		t.Fatalf("expected a new moderation message after previous report was resolved, got %d sends", len(fake.complexSends))
 	}
 }

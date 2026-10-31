@@ -223,3 +223,39 @@ func TestCachePendingBan(t *testing.T) {
 		t.Error("mark after clear should return true")
 	}
 }
+
+func TestCachePendingReport(t *testing.T) {
+	c := NewCache(1000, 3, time.Hour)
+
+	if got := c.GetPendingReport("g1", "u1"); got != nil {
+		t.Fatalf("GetPendingReport before set = %+v, want nil", got)
+	}
+
+	c.SetPendingReport(PendingReport{
+		GuildID:          "g1",
+		ReportedUserID:   "u1",
+		ReportedUsername: "baduser",
+		OriginChannelID:  "c1",
+		InitialReporter:  "alice",
+		InitialReason:    "spam",
+		Messages:         []ReportMessageRef{{ChannelID: "mod1", MessageID: "m1"}},
+	})
+
+	got := c.GetPendingReport("g1", "u1")
+	if got == nil || got.InitialReason != "spam" || len(got.Messages) != 1 {
+		t.Fatalf("unexpected pending report: %+v", got)
+	}
+
+	updated := c.AddPendingReportReason("g1", "u1", "bob", "insults")
+	if updated == nil || len(updated.AdditionalReasons) != 1 {
+		t.Fatalf("expected 1 additional reason, got %+v", updated)
+	}
+	if updated.AdditionalReasons[0].Reporter != "bob" || updated.AdditionalReasons[0].Reason != "insults" {
+		t.Errorf("additional reason = %+v, want {bob insults}", updated.AdditionalReasons[0])
+	}
+
+	c.ClearPendingReport("g1", "u1")
+	if got := c.GetPendingReport("g1", "u1"); got != nil {
+		t.Errorf("expected nil after ClearPendingReport, got %+v", got)
+	}
+}

@@ -23,6 +23,7 @@ type HelperInterface interface {
 func (d *Database) CheckModerationPermissionOnInteraction(s InteractionResponder, i *discordgo.InteractionCreate) bool {
 	if !d.UserHasModerationRole(i.GuildID, i.Member) {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Flags: discordgo.MessageFlagsEphemeral,
 			Embeds: []*discordgo.MessageEmbed{{
 				Description: "❌ Vous n'avez pas la permission d'utiliser cette commande.",
 				Color:       model.Red.Int(),

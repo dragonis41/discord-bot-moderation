@@ -21,8 +21,8 @@ func (d *Database) MigrateLogsConfigs() error {
 	createConfigTableQuery := `
 	CREATE TABLE IF NOT EXISTS logs_config (
 		guild_id TEXT PRIMARY KEY,
-		max_moderation_log_entries INTEGER DEFAULT 1000,
-		max_system_log_entries INTEGER DEFAULT 10000
+		max_moderation_log_entries INTEGER,
+		max_system_log_entries INTEGER
 	);
 	`
 
@@ -36,7 +36,7 @@ func (d *Database) MigrateLogsConfigs() error {
 
 // GetMaxModerationLogEntries retrieves the max entries configuration for a guild
 func (d *Database) GetMaxModerationLogEntries(guildID string) (int, error) {
-	var maxEntries int
+	var maxEntries sql.NullInt64
 	query := `
 	SELECT max_moderation_log_entries FROM logs_config
 	WHERE guild_id = ?;
@@ -50,8 +50,11 @@ func (d *Database) GetMaxModerationLogEntries(guildID string) (int, error) {
 		}
 		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
 	}
+	if !maxEntries.Valid {
+		return 1000, nil
+	}
 
-	return maxEntries, nil
+	return int(maxEntries.Int64), nil
 }
 
 // SetMaxModerationLogEntries sets the maximum number of log entries for a guild
@@ -96,7 +99,7 @@ func (d *Database) IsMaxModerationLogEntriesSet(guildID string) (bool, error) {
 
 // GetMaxSystemLogEntries retrieves the max entries configuration for a guild
 func (d *Database) GetMaxSystemLogEntries(guildID string) (int, error) {
-	var maxEntries int
+	var maxEntries sql.NullInt64
 	query := `
 	SELECT max_system_log_entries FROM logs_config
 	WHERE guild_id = ?;
@@ -110,8 +113,11 @@ func (d *Database) GetMaxSystemLogEntries(guildID string) (int, error) {
 		}
 		return 0, fmt.Errorf("failed to get max guild log entries: %w", err)
 	}
+	if !maxEntries.Valid {
+		return 10000, nil
+	}
 
-	return maxEntries, nil
+	return int(maxEntries.Int64), nil
 }
 
 // SetMaxSystemLogEntries sets the maximum number of log entries for a guild
@@ -133,9 +139,15 @@ func (d *Database) SetMaxSystemLogEntries(guildID string, maxEntries int) error 
 		return fmt.Errorf("failed to cleanup guild logs after setting new limit: %w", err)
 	}
 
-	// Also cleanup system logs
-	if err := d.cleanupOldSystemLogEntries("", maxEntries); err != nil {
-		return fmt.Errorf("failed to cleanup system logs after setting new limit: %w", err)
+	// Also cleanup global system logs using the global system limit
+	if guildID != "" {
+		globalMax, err := d.GetMaxSystemLogEntries("")
+		if err != nil {
+			return fmt.Errorf("failed to get global max system log entries: %w", err)
+		}
+		if err := d.cleanupOldSystemLogEntries("", globalMax); err != nil {
+			return fmt.Errorf("failed to cleanup system logs after setting new limit: %w", err)
+		}
 	}
 
 	return nil

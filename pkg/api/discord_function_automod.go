@@ -151,7 +151,7 @@ func bannedWordMatches(content string, w database.BannedWord) (bool, error) {
 	if !w.IsRegex {
 		word = regexp.QuoteMeta(w.WordPattern)
 	}
-	pattern := fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}])`, word)
+	pattern := fmt.Sprintf(`(?i)(?:^|[\s\p{Z}\p{Cf}\p{P}\p{S}])(%s)(?:$|[\s\p{Z}\p{Cf}\p{P}\p{S}])`, word)
 	return regexp.MatchString(pattern, strings.ToLower(content))
 }
 
@@ -194,13 +194,15 @@ func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message
 	warning := i18n.T(lang, "automod.warning", violationCount, d.cache.violationThreshold, guildName, cause)
 	d.sendPrivateMessage(s, m, warning)
 	for _, part := range utils.SplitMessage(m.Content, 1900) {
-		d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", part))
+		d.sendPrivateMessage(s, m, fmt.Sprintf("```\n%s\n```", sanitizeCodeBlock(part)))
 	}
 
 	if violationCount < d.cache.violationThreshold {
 		// Below threshold: log and delete the message.
 		d.logAutomoderationAction(s, m, model.ActionDeleteMessage, checkName, ruleReason)
 		d.takeAutomoderationAction(s, m, model.ActionDeleteMessage, i18n.T(lang, "automod.violation_suffix", ruleReason, violationCount, d.cache.violationThreshold))
+		d.logInfo(m.GuildID, checkName, "Deleted message from %s containing %s (violation %d/%d)",
+			m.Author.Username, logSubject, violationCount, d.cache.violationThreshold)
 	} else {
 		// Threshold reached: ban the user, guarding against concurrent bans.
 		if !d.cache.MarkUserAsPendingBan(m.GuildID, m.Author.ID) {
@@ -208,10 +210,10 @@ func (d *Discord) escalateContentViolation(s discordSender, m *discordgo.Message
 		}
 		d.logAutomoderationAction(s, m, model.ActionBan, checkName, ruleReason)
 		d.takeAutomoderationAction(s, m, model.ActionBan, i18n.T(lang, "automod.ban_reason", ruleReason, violationCount))
+		d.logInfo(m.GuildID, checkName, "Banned user %s for message containing %s (violation %d/%d)",
+			m.Author.Username, logSubject, violationCount, d.cache.violationThreshold)
 	}
 
-	d.logInfo(m.GuildID, checkName, "Deleted message from %s containing %s (violation %d/%d)",
-		m.Author.Username, logSubject, violationCount, d.cache.violationThreshold)
 	return true
 }
 

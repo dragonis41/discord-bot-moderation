@@ -7,17 +7,18 @@ var fr = map[string]string{
 	"footer.selection_saved": "Les sélections sont sauvegardées à chaque modification",
 
 	// /report ---------------------------------------------------------------
-	"report.title":           "Signalement",
-	"report.user_not_found":  "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer.",
-	"report.no_mod_roles":    "Aucun rôle de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
-	"report.error_generic":   "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
-	"report.no_mod_channels": "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
-	"report.description":     "**Utilisateur signalé**: <@!%s> (%s | %s)\n**Salon**: <#%s>\n**Raison**: %s\n\n**Messages récents**:\n%s",
-	"report.alert_title":     "🚨 Nouveau signalement par %s",
-	"report.alert_footer":    "Aucune action n'a encore été prise.",
-	"report.received":        "L'utilisateur %s a été signalé à la moderation",
-	"report.received_footer": "Merci de rendre ce serveur plus sain.",
-	"report.no_reason":       "Aucune raison fournie",
+	"report.title":             "Signalement",
+	"report.user_not_found":    "L'utilisateur spécifié est introuvable. Veuillez vérifier l'ID et réessayer.",
+	"report.no_mod_roles":      "Aucun rôle de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
+	"report.error_generic":     "Une erreur est survenue lors du traitement de votre demande. Contactez un modérateur.",
+	"report.no_mod_channels":   "Aucun canal de modération n'est configuré pour ce serveur. Veuillez contacter un administrateur.",
+	"report.description":       "**Utilisateur signalé**: <@!%s> (%s | %s)\n**Salon**: <#%s>\n**Raison**: %s\n\n**Messages récents**:\n%s",
+	"report.alert_title":       "🚨 Nouveau signalement par %s",
+	"report.alert_footer":      "Aucune action n'a encore été prise.",
+	"report.received":          "L'utilisateur %s a été signalé à la moderation",
+	"report.received_footer":   "Merci de rendre ce serveur plus sain.",
+	"report.no_reason":         "Aucune raison fournie",
+	"report.additional_reason": "\n• %s (par %s)",
 
 	// /help -----------------------------------------------------------------
 	"help.title":          "💡 Help",
@@ -60,6 +61,7 @@ var fr = map[string]string{
 	// Banned words ----------------------------------------------------------
 	"bannedword.title":            "Mot interdit",
 	"bannedword.empty_word":       "Le mot ne peut pas être vide.",
+	"bannedword.invalid_regex":    "L'expression régulière fournie est invalide.",
 	"bannedword.add_error":        "Une erreur est survenue lors de l'ajout du mot interdit.",
 	"bannedword.type_literal":     "littéral",
 	"bannedword.type_regex":       "regex",

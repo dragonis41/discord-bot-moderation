@@ -52,6 +52,9 @@ func (d *Discord) applyLanguageSelection(s discordClient, i *discordgo.Interacti
 	if len(data.Values) == 0 {
 		return
 	}
+	if !d.checkComponentPermission(s, i) {
+		return
+	}
 	newLang := i18n.Parse(data.Values[0])
 
 	if err := d.db.SetGuildLanguage(i.GuildID, string(newLang)); err != nil {
@@ -68,7 +71,7 @@ func (d *Discord) applyLanguageSelection(s discordClient, i *discordgo.Interacti
 		return
 	}
 
-	d.logSuccess(i.GuildID, "handleLanguageSelection()", "User [%s] set guild [%s] language to [%s]", i.Member.User.Username, i.GuildID, newLang)
+	d.logSuccess(i.GuildID, "handleLanguageSelection()", "User [%s] set guild [%s] language to [%s]", interactionUsername(i), i.GuildID, newLang)
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,

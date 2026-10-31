@@ -1,6 +1,7 @@
 package api
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -41,6 +42,13 @@ func (d *Discord) addBannedWord(s discordClient, i *discordgo.InteractionCreate)
 	if wordPattern == "" {
 		d.followup(s, i, "addBannedWord()", errorEmbed(lang, i18n.T(lang, "bannedword.title"), i18n.T(lang, "bannedword.empty_word")))
 		return
+	}
+
+	if isRegex {
+		if _, err := regexp.Compile(wordPattern); err != nil {
+			d.followup(s, i, "addBannedWord()", errorEmbed(lang, i18n.T(lang, "bannedword.title"), i18n.T(lang, "bannedword.invalid_regex")))
+			return
+		}
 	}
 
 	if err := d.db.AddBannedWord(i.GuildID, wordPattern, isRegex); err != nil {
