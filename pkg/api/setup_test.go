@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -203,11 +204,17 @@ type fakeSender struct {
 	followups     []*discordgo.WebhookParams
 	followupEdits int
 	responseEdits []*discordgo.WebhookEdit
+	complexSends  []complexSendCall
 	messageEdits  []*discordgo.MessageEdit
 
 	// Configurable lookups.
 	guildChannels []*discordgo.Channel
 	guildRoles    []*discordgo.Role
+}
+
+type complexSendCall struct {
+	channelID string
+	data      *discordgo.MessageSend
 }
 
 type banCall struct {
@@ -296,6 +303,14 @@ func (f *fakeSender) User(userID string, _ ...discordgo.RequestOption) (*discord
 	return &discordgo.User{ID: userID, Username: "user-" + userID}, nil
 }
 
+func (f *fakeSender) ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, _ ...discordgo.RequestOption) (*discordgo.Message, error) {
+	f.complexSends = append(f.complexSends, complexSendCall{channelID: channelID, data: data})
+	return &discordgo.Message{
+		ID:        fmt.Sprintf("msg-%d", len(f.complexSends)),
+		ChannelID: channelID,
+	}, nil
+}
+
 func (f *fakeSender) ChannelMessageEditComplex(m *discordgo.MessageEdit, _ ...discordgo.RequestOption) (*discordgo.Message, error) {
 	f.messageEdits = append(f.messageEdits, m)
 	return &discordgo.Message{}, nil
@@ -354,5 +369,13 @@ func boolOpt(name string, value bool) *discordgo.ApplicationCommandInteractionDa
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionBoolean,
 		Value: value,
+	}
+}
+
+func userOpt(name, userID string) *discordgo.ApplicationCommandInteractionDataOption {
+	return &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionUser,
+		Value: userID,
 	}
 }
