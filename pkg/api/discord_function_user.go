@@ -115,31 +115,40 @@ func (d *Discord) reportUser(s discordClient, i *discordgo.InteractionCreate) {
 
 	// If a moderation message is already pending for this user, update it instead of creating a new one
 	if d.cache != nil && d.cache.GetPendingReport(i.GuildID, reportedUser.ID) != nil {
+		var pending *PendingReport
 		if rawReason != "" {
-			pending := d.cache.AddPendingReportReason(i.GuildID, reportedUser.ID, reporterName, rawReason)
-			if pending != nil {
-				updatedEmbed := buildReportAlertEmbed(lang, pending, reportedUser, messages)
-				for _, msgRef := range pending.Messages {
-					_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-						Channel: msgRef.ChannelID,
-						ID:      msgRef.MessageID,
-						Embeds:  &[]*discordgo.MessageEmbed{updatedEmbed},
-					})
-					if err != nil {
-						d.logError(i.GuildID, "reportUser()", "Error updating report message %s in mod channel %s: %s", msgRef.MessageID, msgRef.ChannelID, err)
-					}
-				}
-			}
+			pending = d.cache.AddPendingReportReason(i.GuildID, reportedUser.ID, reporterName, rawReason)
+		} else {
+			pending = d.cache.GetPendingReport(i.GuildID, reportedUser.ID)
 		}
-
-		d.followup(s, i, "reportUser()", &discordgo.MessageEmbed{
-			Title:       i18n.T(lang, "report.title"),
-			Description: i18n.T(lang, "report.received", reportedUser.Username),
-			Color:       model.Green.Int(),
-			Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.received_footer")},
-			Timestamp:   time.Now().UTC().Format(time.RFC3339),
-		})
-		return
+		if pending != nil {
+			updatedEmbed := buildReportAlertEmbed(lang, pending, reportedUser, messages)
+			updatedAny := false
+			for _, msgRef := range pending.Messages {
+				_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+					Channel: msgRef.ChannelID,
+					ID:      msgRef.MessageID,
+					Embeds:  &[]*discordgo.MessageEmbed{updatedEmbed},
+				})
+				if err != nil {
+					d.logWarning(i.GuildID, "reportUser()", "Could not update pending report message %s in mod channel %s (removing from pending): %s", msgRef.MessageID, msgRef.ChannelID, err)
+					d.cache.RemovePendingReportMessage(i.GuildID, msgRef.ChannelID, msgRef.MessageID)
+					continue
+				}
+				updatedAny = true
+			}
+			if updatedAny {
+				d.followup(s, i, "reportUser()", &discordgo.MessageEmbed{
+					Title:       i18n.T(lang, "report.title"),
+					Description: i18n.T(lang, "report.received", reportedUser.Username),
+					Color:       model.Green.Int(),
+					Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.received_footer")},
+					Timestamp:   time.Now().UTC().Format(time.RFC3339),
+				})
+				return
+			}
+			d.cache.ClearPendingReport(i.GuildID, reportedUser.ID)
+		}
 	}
 
 	pending := PendingReport{
@@ -182,6 +191,13 @@ func (d *Discord) reportUser(s discordClient, i *discordgo.InteractionCreate) {
 		Footer:      &discordgo.MessageEmbedFooter{Text: i18n.T(lang, "report.received_footer")},
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func (d *Discord) messageDeleteHandler(_ *discordgo.Session, m *discordgo.MessageDelete) {
+	if m == nil || m.Message == nil || d.cache == nil {
+		return
+	}
+	d.cache.RemovePendingReportMessage(m.GuildID, m.ChannelID, m.ID)
 }
 
 func (d *Discord) showHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {

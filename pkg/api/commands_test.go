@@ -406,14 +406,18 @@ func TestReportUserDeduplicatesPendingReports(t *testing.T) {
 		t.Errorf("updated description should contain both reasons and the second reporter, got %q", editedDesc)
 	}
 
-	// Third report for the same user while pending with an empty reason does not create a new message or edit in an empty reason.
+	// Third report for the same user while pending with an empty reason does not create a new message or add an empty reason.
 	d.reportUser(fake, reportInteractionFrom("u-charlie", "charlie", "c1", userOpt("user", "u-bad")))
 
 	if len(fake.complexSends) != 1 {
 		t.Fatalf("expected no new moderation message on empty-reason duplicate report, got %d sends", len(fake.complexSends))
 	}
-	if len(fake.messageEdits) != 1 {
-		t.Fatalf("expected no message edit when additional reason is empty, got %d edits", len(fake.messageEdits))
+	if len(fake.messageEdits) != 2 {
+		t.Fatalf("expected message edit on third report, got %d edits", len(fake.messageEdits))
+	}
+	thirdDesc := (*fake.messageEdits[1].Embeds)[0].Description
+	if strings.Contains(thirdDesc, "charlie") || strings.Contains(thirdDesc, "No reason provided") {
+		t.Errorf("empty-reason duplicate report must not append a reason, got %q", thirdDesc)
 	}
 
 	// Resolving the report via action button clears the pending state so a subsequent report creates a fresh message.
@@ -421,12 +425,49 @@ func TestReportUserDeduplicatesPendingReports(t *testing.T) {
 	resolveInteraction.ChannelID = "mod1"
 	resolveInteraction.Message = &discordgo.Message{
 		ID:     "msg-1",
-		Embeds: []*discordgo.MessageEmbed{(*fake.messageEdits[0].Embeds)[0]},
+		Embeds: []*discordgo.MessageEmbed{(*fake.messageEdits[1].Embeds)[0]},
 	}
 	d.handleReportAction(fake, resolveInteraction)
 
 	d.reportUser(fake, reportInteractionFrom("u-dave", "dave", "c1", userOpt("user", "u-bad"), strOpt("reason", "new offense")))
 	if len(fake.complexSends) != 2 {
 		t.Fatalf("expected a new moderation message after previous report was resolved, got %d sends", len(fake.complexSends))
+	}
+}
+
+func TestReportUserRecreatesMessageWhenDeletedWithoutAction(t *testing.T) {
+	fs := &fakeStore{
+		modRoles:    []string{"r1"},
+		modChannels: []string{"mod1"},
+	}
+	d := newTestDiscordWith(fs, NewCache(1000, 3, time.Hour))
+	fake := &fakeSender{}
+
+	// First report sends msg-1.
+	d.reportUser(fake, reportInteractionFrom("u-alice", "alice", "c1", userOpt("user", "u-bad"), strOpt("reason", "test suppression")))
+	if len(fake.complexSends) != 1 {
+		t.Fatalf("expected 1 moderation message sent, got %d", len(fake.complexSends))
+	}
+
+	// Simulate the moderation message having been deleted on Discord (HTTP 404 on edit).
+	fake.messageEditErr = discordgo.ErrStateNotFound
+	d.reportUser(fake, reportInteractionFrom("u-alice", "alice", "c1", userOpt("user", "u-bad"), strOpt("reason", "test après suppression")))
+	fake.messageEditErr = nil
+
+	if len(fake.complexSends) != 2 {
+		t.Fatalf("expected a new moderation message when the previous one was deleted, got %d sends", len(fake.complexSends))
+	}
+	newDesc := fake.complexSends[1].data.Embed.Description
+	if !strings.Contains(newDesc, "test après suppression") || strings.Contains(newDesc, "test suppression") {
+		t.Errorf("new moderation message should contain only the new report reason, got %q", newDesc)
+	}
+
+	// Also verify that a MESSAGE_DELETE gateway event clears the pending report immediately.
+	d.messageDeleteHandler(nil, &discordgo.MessageDelete{
+		Message: &discordgo.Message{ID: "msg-2", ChannelID: "mod1", GuildID: "g1"},
+	})
+	d.reportUser(fake, reportInteractionFrom("u-bob", "bob", "c1", userOpt("user", "u-bad"), strOpt("reason", "after gateway delete")))
+	if len(fake.complexSends) != 3 {
+		t.Fatalf("expected a new moderation message after MESSAGE_DELETE event, got %d sends", len(fake.complexSends))
 	}
 }
